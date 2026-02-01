@@ -1,6 +1,5 @@
 import os
 import asyncio
-from aiohttp_mcp import AiohttpMCP
 import sqless
 
 # --- Paths & Configuration ---
@@ -20,21 +19,21 @@ open_get_prefix :list = [
 # --- Database & MCP Server Initialization ---
 
 dbs = sqless.DBS(path_base_db)
-mcp = AiohttpMCP("My App", log_level="WARNING")
+
 
 # --- MCP Tools / API Functions ---
 
-@mcp.tool()
+@sqless.api
 def hello() -> str:
     """A simple hello tool"""
     return "Hello from MCP!"
 
-@mcp.tool()
+@sqless.api
 def add(a: int, b: int) -> int:
     """A simple add tool"""
     return a + b
 
-@mcp.tool()
+@sqless.api
 def get_time(timezone: str) -> str:
     """Return current time in any timezone"""
     import datetime
@@ -45,7 +44,7 @@ def get_time(timezone: str) -> str:
 # Async demo with semaphore (limit concurrent invocations)
 semaphore_sleep = asyncio.Semaphore(3)
 
-@mcp.tool()
+@sqless.api
 async def sleep(seconds: int) -> str:
     """Sleep for given seconds, demonstrating rate limiting"""
     import datetime
@@ -76,4 +75,7 @@ Browser usage:
     http://127.0.0.1:12239/api/add 1 2
         username: (empty)
         password: <secret>
+
+Claude Code usage:
+    claude mcp add --transport http <mcp_name> http://127.0.0.1:12239/mcp --header "Authorization: Bearer <secret>"
 """

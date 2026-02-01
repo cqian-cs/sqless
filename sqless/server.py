@@ -4,6 +4,63 @@ from .database import DB
 # ---------- Configuration (use env vars in production) ----------
 DEFAULT_SECRET = os.environ.get("SQLESS_SECRET", None)
 
+import inspect
+from typing import get_origin, get_args, Literal, List
+func_table = {}
+tools = []
+def api(func):
+    """函数装饰器，用于将一个普通Python函数转换为MCP工具的JSON Schema定义。"""
+    properties = {}
+    required_params = []
+    for name, param in inspect.signature(func).parameters.items():
+        param_schema = {}
+        py_type = param.annotation
+        param_schema["type"] = {
+            int:'integer',
+            float:'number',
+            bool:'boolean',
+            str:'string',
+            inspect._empty:'string'
+        }.get(py_type)
+        if not param_schema["type"]:
+            origin = get_origin(py_type)
+            args = get_args(py_type)
+            if origin is Literal:
+                param_schema["type"] = type(args[0]).__name__
+                param_schema["enum"] = list(args)
+            elif origin is list:
+                param_schema["type"] = "array"
+                item_type = args[0] if args else str
+                if item_type is int: param_schema["items"] = {"type": "integer"}
+                elif item_type is float: param_schema["items"] = {"type": "number"}
+                elif item_type is bool: param_schema["items"] = {"type": "boolean"}
+                else: param_schema["items"] = {"type": "string"}
+            else:
+                param_schema["type"] = "object"
+        if param.default is not inspect._empty:
+            param_schema["default"] = param.default
+        else:
+            required_params.append(name)
+        properties[name] = param_schema
+    input_schema = {
+        "type": "object",
+        "properties": properties,
+    }
+    if required_params:
+        input_schema["required"] = required_params
+    mcp_definition = {
+        "name": func.__name__,
+        "description": func.__doc__,
+        "inputSchema": input_schema
+    }
+    tools.append(mcp_definition)
+    func_table[func.__name__]={'f':func,'async':inspect.iscoroutinefunction(func)}
+    def wrapper(*args,**kwargs):
+        return func(*args,**kwargs)
+    wrapper.__name__ = func.__name__
+    wrapper.__doc__ = func.__doc__
+    return wrapper
+
 
 def check_path(path_file, path_base):
     normalized_path = os.path.realpath(path_file)
@@ -150,9 +207,14 @@ if __name__=='__main__':
                 return await handler(request)
             if request.method == 'GET' and request.path.startswith(open_get_prefix):
                 return await handler(request)
+            if request.path == '/mcp':
+                return web.json_response(
+                    {"jsonrpc": "2.0", "error": {"code": -32000, "message": "Unauthorized: Invalid token"}, "id": None},
+                    status=403
+                )
             return web.Response(status=401,text='Unauthorized',headers={'WWW-Authenticate': 'Basic realm="sqless API"'})
         return middleware_handler
-
+    
     async def handle_post_db(request):
         db_table = request.match_info['db_table']
         if request.content_type == 'application/json':
@@ -264,7 +326,10 @@ if __name__=='__main__':
             print(f"fs/post error: {e}\n{traceback.format_exc()}")
     async def handle_static(request):
         file = request.match_info.get('file') or 'index.html'
-        return web.FileResponse(f"{path_base_www}/{file}")
+        suc, normalized_path = check_path(f"{path_base_www}/{file}", path_base_www)
+        if suc and os.path.exists(normalized_path):
+            return web.FileResponse(f"{path_base_www}/{file}")
+        return web.Response(status=404, text="404 Not Found")
 
     async def handle_xmlhttpRequest(request):
         try:
@@ -302,23 +367,78 @@ if __name__=='__main__':
                     }), content_type='application/json')
         except Exception as e:
             return web.Response(body=orjson.dumps({"suc": False, "text": str(e)}), content_type='application/json')
-    tools = {}
-    async def call_once(tool,args,kwargs):
+    async def handle_mcp_request(request: web.Request) -> web.Response:
+        response = web.StreamResponse()
+        response.content_type = 'text/event-stream'
+        response.headers['Cache-Control'] = 'no-cache'
+        response.headers['X-Accel-Buffering'] = 'no' 
+        await response.prepare(request)
+
         try:
-            if tool.is_async:
-                ret = await tool.fn(*args,**kwargs)
+            data = await request.json()
+
+            request_method = data.get("method")
+            request_id = data.get("id")
+            params = data.get("params", {})
+
+            response_body = {"jsonrpc": "2.0", "id": request_id}
+            if request_method == "initialize":
+                response_body["result"] = {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "aiohttp-mcp-server", "version": "1.0.0"}
+                }
+            elif request_method == "tools/list":
+                response_body["result"] = {"tools": tools}
+            elif request_method == "tools/call":
+                tool_name = params.get("name")
+                arguments = params.get("arguments", {})
+                if tool_name in func_table:
+                    try:
+                        result = await call_once(func_table[tool_name], [], arguments)
+                        response_body["result"] = {"content": [{"type": "text", "text": result if type(result)==str else orjson.dumps(result).decode()}]}
+                    except Exception as tool_error:
+                        response_body["error"] = {"code": -32603, "message": str(tool_error)}
+                else:
+                    response_body["error"] = {"code": -32601, "message": f"Tool not found: {tool_name}"}
             else:
-                ret = tool.fn(*args,**kwargs)
+                response_body["error"] = {"code": -32601, "message": "Method not found"}
+            message = f"event: message\ndata: {orjson.dumps(response_body).decode()}\n\n"
+            await response.write(message.encode('utf-8'))
+            await response.write_eof()
+            return response
+
+        except orjson.JSONDecodeError as e:
+            error_body = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}}
+            msg = f"event: message\ndata: {orjson.dumps(error_body).decode()}\n\n"
+            await response.write(msg.encode('utf-8'))
+            return response
+
+        except Exception as e:
+            error_body = {"jsonrpc": "2.0", "id": data.get("id") if 'data' in locals() else None, "error": {"code": -32603, "message": "Internal error"}}
+            msg = f"event: message\ndata: {orjson.dumps(error_body).decode()}\n\n"
+            await response.write(msg.encode('utf-8'))
+            return response
+
+
+    
+    async def call_once(func,args,kwargs):
+        print(kwargs)
+        try:
+            if func['async']:
+                ret = await func['f'](*args,**kwargs)
+            else:
+                ret = func['f'](*args,**kwargs)
         except Exception as e:
             ret = {'suc':False,'data':f"Tool exception: {e}"}
         return ret
     async def handle_get_api(request):
         func_args = request.match_info.get('func_args')
         cmd = list(split(func_args,' '))
-        f = cmd[0]
-        if f not in tools:
+        func_name = cmd[0]
+        if func_name not in func_table:
             return web.Response(body=orjson.dumps({"suc": False, "data": "Tool not found"}), content_type='application/json')
-        tool = tools[f]
+        func = func_table[func_name]
         args = []
         kwargs = {}
         for x in cmd[1:]:
@@ -330,12 +450,12 @@ if __name__=='__main__':
             except: pass
             kwargs[k] = v
         info_params = ','.join([str(x) for x in args]+[f"{k}={v}" for k,v in kwargs.items()])
-        print(f"[{num2time()}]{request['client_ip']}|CALL {'async ' if tool.is_async else ''}{f}({info_params})")
-        task = asyncio.create_task(call_once(tool, args, kwargs))
+        print(f"[{num2time()}]{request['client_ip']}|CALL {'async ' if func['async'] else ''}{func_name}({info_params})")
+        task = asyncio.create_task(call_once(func, args, kwargs))
         while not task.done():
             await asyncio.sleep(0.1)
             if request.transport is None or request.transport.is_closing():
-                print(f"[{num2time()}]{request['client_ip']}|CANCEL {'async ' if tool.is_async else ''}{f}({info_params})")
+                print(f"[{num2time()}]{request['client_ip']}|CANCEL {'async ' if func['async'] else ''}{func_name}({info_params})")
                 task.cancel()
                 return
         ret = await task
@@ -350,17 +470,17 @@ if __name__=='__main__':
         print(kwargs)
         if 'f' not in kwargs:
             return web.Response(body=orjson.dumps({"suc": False, "data": "Miss 'f' input"}), content_type='application/json')
-        f = kwargs.pop('f')
-        if f not in tools:
+        func_name = kwargs.pop('f')
+        if func_name not in func_table:
             return web.Response(body=orjson.dumps({"suc": False, "data": "Tool not found"}), content_type='application/json')
-        tool = tools[f]
+        func = func_table[func_name]
         info_params = ','.join([f"{k}={v}" for k,v in kwargs.items()])
-        print(f"[{num2time()}]{request['client_ip']}|CALL {'async ' if tool.is_async else ''}{f}({info_params})")
-        task = asyncio.create_task(call_once(tool, [], kwargs))
+        print(f"[{num2time()}]{request['client_ip']}|CALL {'async ' if func['async'] else ''}{func_name}({info_params})")
+        task = asyncio.create_task(call_once(func, [], kwargs))
         while not task.done():
             await asyncio.sleep(0.1)
             if request.transport is None or request.transport.is_closing():
-                print(f"[{num2time()}]{request['client_ip']}|CANCEL {'async ' if tool.is_async else ''}{f}({info_params})")
+                print(f"[{num2time()}]{request['client_ip']}|CANCEL {'async ' if func['async'] else ''}{func_name}({info_params})")
                 task.cancel()
                 return
         ret = await task
@@ -376,12 +496,8 @@ if __name__=='__main__':
     app.router.add_post('/xmlhttpRequest', handle_xmlhttpRequest)
     app.router.add_get('/api/{func_args:.*}',handle_get_api)
     app.router.add_post('/api',handle_post_api)
-    if hasattr(cfg, 'mcp'):
-        from aiohttp_mcp import setup_mcp_subapp
-        tools = cfg.mcp._fastmcp._tool_manager._tools
-        print(f"MCP: {len(tools)} tools loaded.")
-        print([k for k in tools.keys()])
-        setup_mcp_subapp(app, cfg.mcp, prefix="/mcp")
+    app.router.add_post('/mcp',handle_mcp_request)
+    app.router.add_get('/mcp_tools',lambda r:web.Response(body=orjson.dumps(tools), content_type='application/json'))
     app.router.add_get('/{file:.*}', handle_static)
     
     runner = web.AppRunner(app)

@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="sqless",
-    version="0.2.1",
+    version="0.2.2",
     author="pro1515151515",
     author_email="pro1515151515@qq.com",
     description="An async HTTP server for SQLite, FileStorage and WebPage.",
@@ -30,8 +30,7 @@ setup(
     install_requires=[
         "aiohttp>=3.8.0",
         "orjson>=3.6.0",
-        "aiofiles>=0.8.0",
-        "aiohttp-mcp>=0.6.1"
+        "aiofiles>=0.8.0"
     ],
     entry_points={
         "console_scripts": [

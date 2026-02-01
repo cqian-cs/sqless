@@ -247,14 +247,14 @@ for user in rdb.db_iter("demo-users",''): # An empty where='' returns all data
 
 After running `sqless --secret RANDOM_PASSWORD`, it will create a `sqless_config.py` at the current directory.
 
-You can modify the demo functions, wrap with `@mcp.tool()`, restart `sqless`, then use your functions in both MCP and API modes.
+You can modify the demo functions, wrap with `@sqless.api`, restart `sqless`, then use your functions in both MCP and API modes.
 
 The MCP functions are automatically registered as API endpoints, providing dual functionality.
 
 When running long tasks, if client connection closes, the task will be automatically canceled.
 
 ```python
-@mcp.tool()
+@sqless.api
 def add(a: int, b: int) -> int:
     """A simple add tool"""
     return a + b
@@ -263,6 +263,10 @@ def add(a: int, b: int) -> int:
 - MCP usage:
     - URL: http://127.0.0.1:12239/mcp
     - Header: `Authorization`: `Bearer <secret>`
+
+- Claude Code usage:
+    - `claude mcp add --transport http <mcp_name> http://127.0.0.1:12239/mcp --header "Authorization: Bearer <secret>"`
+
 - API usage:
     - GET example:
         ```
