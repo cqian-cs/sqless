@@ -120,6 +120,22 @@ if __name__=='__main__':
         f'Bearer {secret}',
         f"Basic {base64.b64encode((':'+secret).encode('utf-8')).decode('utf-8')}",
     ]
+    async def cors_middleware(app, handler):
+        async def middleware_handler(request):
+        # 1. 检查是否是预检请求
+            if request.method == 'OPTIONS':
+                # 直接返回一个 204 No Content 响应，并附上通用的 CORS 头
+                response = web.Response(status=204)
+                response.headers['Access-Control-Allow-Origin'] = '*'
+                response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+                response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+                return response
+
+            # 2. 对于非 OPTIONS 请求，正常处理
+            response = await handler(request)
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response
+        return middleware_handler
     async def auth_middleware(app, handler):
         async def middleware_handler(request):
             try:
@@ -351,7 +367,7 @@ if __name__=='__main__':
         return web.Response(body=orjson.dumps(ret), content_type='application/json')
 
 
-    app = web.Application(middlewares=[auth_middleware], client_max_size=max_filesize * 1024 ** 2)
+    app = web.Application(middlewares=[cors_middleware,auth_middleware], client_max_size=max_filesize * 1024 ** 2)
     app.router.add_post('/db/{db_table}', handle_post_db)
     app.router.add_get('/db/{db_table}/{where:.*}', handle_get_db)
     app.router.add_delete('/db/{db_table}/{where:.*}', handle_delete_db)

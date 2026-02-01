@@ -24,7 +24,7 @@ class RDB:
     def fs_set(self, key: str, data_or_path: Union[str, Any], retry: int = 5) -> bool:
         url = f"{self.host}/fs/{key}"
 
-        for _ in range(retry):
+        for i in range(retry):
             try:
                 if isinstance(data_or_path, str) and os.path.exists(data_or_path):
                     with open(data_or_path, "rb") as f:
@@ -43,7 +43,8 @@ class RDB:
                 ret = r.json()
                 return bool(ret.get("suc"))
 
-            except Exception:
+            except Exception as e:
+                print(f"fs_set exception: {e} (retry {retry-i})")
                 time.sleep(1)
 
         return False
