@@ -1,5 +1,7 @@
 # sqless
 
+[English Version](README.md) | [中文版](README_zh.md)
+
 A **schema-flexible, zero-abstraction SQLite interface** supporting **Relational tables, JSON tables, Full-Text Search, and Semantic Search**.
 
 ---
