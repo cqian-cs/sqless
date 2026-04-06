@@ -77,7 +77,7 @@ print(table['U1']) # {'key': 'U1', 'name': 'Tom', 'age': 15}
 
 * Partial updates: updating one field does not affect others.
 
-See [hello-sqless.py](examples/1-hello-sqless.py) for details.
+See [examples/hello-sqless.py](examples/1-hello-sqless.py) for details.
 
 ---
 
@@ -92,7 +92,8 @@ print(table['U1']) # {'age': 15}
 
 * Full replacement: writing field A will overwrite old fields.
 
-See [json-table-example.py](examples/3-json-table-example.py) for details.
+See [examples/json-table-example.py](examples/3-json-table-example.py) for details.
+
 ---
 
 ### 🔹 FTS Table (Full-Text Search)
@@ -107,7 +108,7 @@ table.upsert({
 results = table.search('"SQLite"')
 ```
 
-See [fts-table-example.py](examples/4-fts-table-example.py) for details.
+See [examples/fts-table-example.py](examples/4-fts-table-example.py) for details.
 
 ---
 
@@ -130,7 +131,7 @@ table.upsert({
 results = table.search("large language model", k=2)
 ```
 
-See [vec-table-example.py](examples/5-vec-table-example.py) for details.
+See [examples/vec-table-example.py](examples/5-vec-table-example.py) for details.
 
 ---
 
@@ -151,7 +152,7 @@ app-Asia-users
 app-Asia.sqlite / users
 ```
 
-See [multi-files-sqless.py](examples/2-multi-files-sqless.py) for details.
+See [examples/multi-files-sqless.py](examples/2-multi-files-sqless.py) for details.
 
 ---
 
@@ -164,7 +165,7 @@ del db['users']
 db.close()
 ```
 
-See [hello-sqless.py](examples/1-hello-sqless.py) for details.
+See [examples/hello-sqless.py](examples/1-hello-sqless.py) for details.
 
 ---
 
