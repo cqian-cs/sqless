@@ -18,6 +18,11 @@ A **schema-flexible, zero-abstraction SQLite interface** supporting **Relational
 
 ## ⚡ Performance Test
 
+* **Unit:** Seconds (lower is better).
+* **Percentages** indicate the performance difference compared to other libraries.
+    * `↑`: How much faster `sqless` is than the library (i.e., how much slower the library is).
+    * `↓`: How much slower `sqless` is than raw SQLite (i.e., the overhead of `sqless`).
+
 | Name       | Init         | Write         | Update       | Read          | Category      |
 | ---------- | ------------ | ------------- | ------------ | ------------- |---------------|
 | sqlalchemy | 0.022 (↑12%) | 5.572 (↑94%)  | 3.218 (↑99%) | 58.345 (↑97%) | Static schema |
