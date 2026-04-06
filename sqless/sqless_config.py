@@ -12,9 +12,9 @@ path_base_www :str = os.path.realpath(f"{path_this}/www")
 max_filesize :int = 200  # Max file size (in MB) allowed in POST /fs
 
 open_get_prefix :list = [
-    '/fs/data',   # allow GET /fs/data/xxx to fetch f"{path_this_fs}/data/xxx" without secret
+    '/fs/data',  # allow GET /fs/xxx to fetch f"{path_base_fs}/xxx" without secret
     '/api/hello' # allow GET /api/hello without secret
-] 
+]
 
 # --- Database & MCP Server Initialization ---
 

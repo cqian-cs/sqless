@@ -1,5 +1,5 @@
 import os
-from .database import DB
+from .database import DBS
 
 # ---------- Configuration (use env vars in production) ----------
 DEFAULT_SECRET = os.environ.get("SQLESS_SECRET", None)
@@ -12,7 +12,9 @@ def api(func):
     """函数装饰器，用于将一个普通Python函数转换为MCP工具的JSON Schema定义。"""
     properties = {}
     required_params = []
+    params = []
     for name, param in inspect.signature(func).parameters.items():
+        params.append(name)
         param_schema = {}
         py_type = param.annotation
         param_schema["type"] = {
@@ -54,7 +56,7 @@ def api(func):
         "inputSchema": input_schema
     }
     tools.append(mcp_definition)
-    func_table[func.__name__]={'f':func,'async':inspect.iscoroutinefunction(func)}
+    func_table[func.__name__]={'f':func,'async':inspect.iscoroutinefunction(func),'params':params}
     def wrapper(*args,**kwargs):
         return func(*args,**kwargs)
     wrapper.__name__ = func.__name__
@@ -96,25 +98,6 @@ def split(s, sep=',', L="{[(\"'", R="}])\"'"):
         yield temp
 
 
-class DBS:
-    def __init__(self,folder):
-        self.folder = folder
-        self.dbs = {}
-    def __getitem__(self, db_key):
-        db_key = db_key.replace('/', '-')
-        if db_key not in self.dbs:
-            suc, path_db = check_path(f"{self.folder}/{db_key}.sqlite", self.folder)
-            if not suc:
-                return False, path_db
-            db = DB(path_db)
-            self.dbs[db_key] = db
-        return self.dbs[db_key]
-    def close(self):
-        for db_key in list(self.dbs.keys()):
-            self.dbs[db_key].close()
-            del self.dbs[db_key]
-        
-
 async def run_server(
     host='0.0.0.0',
     port=27018,
@@ -139,7 +122,7 @@ async def run_server(
     if not secret:
         print("[ERROR] Please set SQLESS_SECRET environment variable or pass --secret <secret>")
         return
-    
+
     path_cfg = os.path.abspath(path_cfg)
     if not os.path.exists(path_cfg):
         os.makedirs(os.path.dirname(path_cfg),exist_ok=True)
@@ -181,7 +164,6 @@ if __name__=='__main__':
         async def middleware_handler(request):
         # 1. 检查是否是预检请求
             if request.method == 'OPTIONS':
-                # 直接返回一个 204 No Content 响应，并附上通用的 CORS 头
                 response = web.Response(status=204)
                 response.headers['Access-Control-Allow-Origin'] = '*'
                 response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
@@ -214,7 +196,7 @@ if __name__=='__main__':
                 )
             return web.Response(status=401,text='Unauthorized',headers={'WWW-Authenticate': 'Basic realm="sqless API"'})
         return middleware_handler
-    
+
     async def handle_post_db(request):
         db_table = request.match_info['db_table']
         if request.content_type == 'application/json':
@@ -222,51 +204,43 @@ if __name__=='__main__':
         else:
             post = await request.post()
             data = dict(post)
-        db_key, table = os.path.split(db_table.replace('-', '/'))
-        db_key = db_key or 'default'
-        if not identifier_re.fullmatch(table):
-            return web.Response(body=orjson.dumps({'suc': False, 'data': 'invalid table name'}), content_type='application/json')
-        #db = await get_db(db_key)
-        db = dbs[db_key]
-        if isinstance(db, tuple) and db[0] is False:
-            return web.Response(body=orjson.dumps({'suc': False, 'data': db[1]}), content_type='application/json')
-        print(f"[{num2time()}]{request['client_ip']}|POST {db_key}|{table}|{data}")
         if not isinstance(data, dict):
             return web.Response(body=orjson.dumps({'suc': False, 'data': 'invalid data type'}), content_type='application/json')
-        ret = db.upsert(table, data, 'key')
+        key = data.get('key')
+        if not key:
+            return web.Response(body=orjson.dumps({'suc': False, 'data': 'missing key'}), content_type='application/json')
+        table = dbs[db_table]
+        if table is None:
+            return web.Response(body=orjson.dumps({'suc': False, 'data': 'invalid db/table'}), content_type='application/json')
+        print(f"[{num2time()}]{request['client_ip']}|POST {db_table}|{data}")
+        ret = table.upsert({key: data})
         return web.Response(body=orjson.dumps(ret), content_type='application/json')
 
     async def handle_delete_db(request):
         db_table = request.match_info['db_table']
-        db_key, table = os.path.split(db_table.replace('-', '/'))
-        db_key = db_key or 'default'
-        if not identifier_re.fullmatch(table):
-            return web.Response(body=orjson.dumps({'suc': False, 'data': 'invalid table name'}), content_type='application/json')
-        #db = await get_db(db_key)
-        db = dbs[db_key]
         where = request.match_info['where']
-        print(f"[{num2time()}]{request['client_ip']}|DELETE {db_key}|{table}|{where}")
-        ret = db.delete(table, where)
+        table = dbs[db_table]
+        if table is None:
+            return web.Response(body=orjson.dumps({'suc': False, 'data': 'invalid db/table'}), content_type='application/json')
+        print(f"[{num2time()}]{request['client_ip']}|DELETE {db_table}|{where}")
+        ret = table.delete(where)
         return web.Response(body=orjson.dumps(ret), content_type='application/json')
 
     async def handle_get_db(request):
         db_table = request.match_info['db_table']
-        db_key, table = os.path.split(db_table.replace('-', '/'))
-        db_key = db_key or 'default'
-        if not identifier_re.fullmatch(table):
-            return web.Response(body=orjson.dumps({'suc': False, 'data': 'invalid table name'}), content_type='application/json')
-        #db = await get_db(db_key)
-        db = dbs[db_key]
         where = request.match_info['where']
+        table = dbs[db_table]
+        if table is None:
+            return web.Response(body=orjson.dumps({'suc': False, 'data': 'invalid db/table'}), content_type='application/json')
         page = max(int(request.query.get('page', 1)), 1)
         limit = min(max(int(request.query.get('per_page', 20)), 0), 100)
         offset = (page - 1) * limit
-        print(f"[{num2time()}]{request['client_ip']}|GET {db_key}|{table}|{where}?page={page}&per_page={limit}")
-        ret = db.query(table, where, limit, offset)
-        if isinstance(ret, dict) and ret.get('suc') and limit > 1 and not offset:
-            cnt = db.count(table, where)
-            ret['count'] = cnt
-            ret['max_page'], rest = divmod(ret['count'], limit)
+        print(f"[{num2time()}]{request['client_ip']}|GET {db_table}|{where}?page={page}&per_page={limit}")
+        items = list(table.iter(where=where, limit=limit, offset=offset))
+        cnt = table.count(where)
+        ret = {'suc': True, 'data': items, 'count': cnt}
+        if limit > 0:
+            ret['max_page'], rest = divmod(cnt, limit)
             if rest:
                 ret['max_page'] += 1
         return web.Response(body=orjson.dumps(ret), content_type='application/json')
@@ -306,7 +280,6 @@ if __name__=='__main__':
             field = await reader.next()
             if not field:
                 return web.Response(body=orjson.dumps({'suc': False, 'data': 'No file uploaded'}), content_type='application/json')
-            # write file safely
             try:
                 async with aiofiles.open(path_file, 'wb') as f:
                     while True:
@@ -314,7 +287,6 @@ if __name__=='__main__':
                         if not chunk:
                             break
                         await f.write(chunk)
-                # ensure uploaded file isn't executable
                 try:
                     os.chmod(path_file, 0o644)
                 except Exception:
@@ -354,7 +326,6 @@ if __name__=='__main__':
                     )
             else:
                 payload = data.get('data')
-            # enclose outgoing request with timeout
             timeout = ClientTimeout(total=15)
             async with ClientSession(timeout=timeout) as session:
                 async with session.request(method, url, headers=headers, data=payload, allow_redirects=True) as resp:
@@ -371,7 +342,7 @@ if __name__=='__main__':
         response = web.StreamResponse()
         response.content_type = 'text/event-stream'
         response.headers['Cache-Control'] = 'no-cache'
-        response.headers['X-Accel-Buffering'] = 'no' 
+        response.headers['X-Accel-Buffering'] = 'no'
         await response.prepare(request)
 
         try:
@@ -395,7 +366,7 @@ if __name__=='__main__':
                 arguments = params.get("arguments", {})
                 if tool_name in func_table:
                     try:
-                        result = await call_once(func_table[tool_name], [], arguments)
+                        result = await call_once(func_table[tool_name], arguments, request['client_ip'])
                         response_body["result"] = {"content": [{"type": "text", "text": result if type(result)==str else orjson.dumps(result).decode()}]}
                     except Exception as tool_error:
                         response_body["error"] = {"code": -32603, "message": str(tool_error)}
@@ -421,16 +392,19 @@ if __name__=='__main__':
             return response
 
 
-    
-    async def call_once(func,args,kwargs):
-        print(kwargs)
+
+    async def call_once(func,kwargs,clinet_ip,_serial_number=[0]):
+        serial_number = _serial_number[0]
+        _serial_number[0] += 1
+        print(f"[{num2time()}]{clinet_ip}|FUNC CALL[{serial_number}] {func['f'].__name__} {kwargs}")
         try:
             if func['async']:
-                ret = await func['f'](*args,**kwargs)
+                ret = await func['f'](**kwargs)
             else:
-                ret = func['f'](*args,**kwargs)
+                ret = func['f'](**kwargs)
         except Exception as e:
             ret = {'suc':False,'data':f"Tool exception: {e}"}
+        print(f"[{num2time()}]{clinet_ip}|FUNC RETURN[{serial_number}] {ret}")
         return ret
     async def handle_get_api(request):
         func_args = request.match_info.get('func_args')
@@ -439,28 +413,25 @@ if __name__=='__main__':
         if func_name not in func_table:
             return web.Response(body=orjson.dumps({"suc": False, "data": "Tool not found"}), content_type='application/json')
         func = func_table[func_name]
-        args = []
         kwargs = {}
-        for x in cmd[1:]:
-            try:x = ast.literal_eval(x)
+        for k,v in zip(func['params'],cmd[1:]):
+            try:v = ast.literal_eval(v)
             except: pass
-            args.append(x)
+            kwargs[k] = v
         for k,v in request.query.items():
             try:v = ast.literal_eval(v)
             except: pass
             kwargs[k] = v
-        info_params = ','.join([str(x) for x in args]+[f"{k}={v}" for k,v in kwargs.items()])
-        print(f"[{num2time()}]{request['client_ip']}|CALL {'async ' if func['async'] else ''}{func_name}({info_params})")
-        task = asyncio.create_task(call_once(func, args, kwargs))
+        task = asyncio.create_task(call_once(func, kwargs, request['client_ip']))
         while not task.done():
             await asyncio.sleep(0.1)
             if request.transport is None or request.transport.is_closing():
-                print(f"[{num2time()}]{request['client_ip']}|CANCEL {'async ' if func['async'] else ''}{func_name}({info_params})")
+                print(f"[{num2time()}]{request['client_ip']}|CANCEL {'async ' if func['async'] else ''}{func_name}")
                 task.cancel()
                 return
         ret = await task
         return web.Response(body=orjson.dumps(ret), content_type='application/json')
-    
+
     async def handle_post_api(request):
         if request.content_type == 'application/json':
             kwargs = await request.json()
@@ -475,8 +446,7 @@ if __name__=='__main__':
             return web.Response(body=orjson.dumps({"suc": False, "data": "Tool not found"}), content_type='application/json')
         func = func_table[func_name]
         info_params = ','.join([f"{k}={v}" for k,v in kwargs.items()])
-        print(f"[{num2time()}]{request['client_ip']}|CALL {'async ' if func['async'] else ''}{func_name}({info_params})")
-        task = asyncio.create_task(call_once(func, [], kwargs))
+        task = asyncio.create_task(call_once(func, kwargs, request['client_ip']))
         while not task.done():
             await asyncio.sleep(0.1)
             if request.transport is None or request.transport.is_closing():
@@ -499,7 +469,7 @@ if __name__=='__main__':
     app.router.add_post('/mcp',handle_mcp_request)
     app.router.add_get('/mcp_tools',lambda r:web.Response(body=orjson.dumps(tools), content_type='application/json'))
     app.router.add_get('/{file:.*}', handle_static)
-    
+
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, host, port)
@@ -508,7 +478,6 @@ if __name__=='__main__':
     print(f"Serving at {os.path.abspath(path_this)}")
     stop_event = asyncio.Event()
     try:
-        # simplified loop, exit on Cancelled/Error
         while not stop_event.is_set():
             await asyncio.sleep(86400)
     except asyncio.CancelledError:
@@ -520,7 +489,8 @@ if __name__=='__main__':
 def main():
     import argparse
     import asyncio
-    
+    import sys
+
     parser = argparse.ArgumentParser(description='Run the sqless server')
     parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
     parser.add_argument('--port', type=int, default=12239, help='Port to bind to (default: 12239)')
@@ -528,7 +498,7 @@ def main():
     parser.add_argument('--path', default=os.getcwd(), help=f'Base path for database and file storage (default: {os.getcwd()})')
     parser.add_argument('--cfg', type=str, default='sqless_config.py', help='Path to configuration file')
     args = parser.parse_args()
-    
+
     asyncio.run(run_server(
         host=args.host,
         port=args.port,

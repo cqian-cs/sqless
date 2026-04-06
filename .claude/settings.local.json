@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(python -m pytest tests/test_database.py -v)",
+      "Bash(python -m pytest tests/test_server.py -v -x)",
+      "Bash(python -c ':*)",
+      "Bash(python -c \"from sqless.vec import VecTable; print\\('VecTable import OK'\\)\")",
+      "Bash(python -c \"from sqless import DBS, Table; print\\('sqless import OK'\\)\")"
     ]
   }
 }

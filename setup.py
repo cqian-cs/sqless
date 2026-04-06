@@ -5,13 +5,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="sqless",
-    version="0.2.2",
-    author="pro1515151515",
-    author_email="pro1515151515@qq.com",
-    description="An async HTTP server for SQLite, FileStorage and WebPage.",
+    version="3.0.0",
+    author="cqian.cs",
+    author_email="cqian.cs@qq.com",
+    description="A schema-flexible, zero-abstraction SQLite interface supporting Relational tables, JSON tables, Full-Text Search, and Semantic Search.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/pro1515151515/sqless",
+    url="https://github.com/cqian-cs/sqless",
     packages=find_packages(),
     include_package_data=True,
     package_data={
@@ -20,18 +20,25 @@ setup(
         ],
     },
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=[
-        "aiohttp>=3.8.0",
         "orjson>=3.6.0",
-        "aiofiles>=0.8.0"
+        'aiohttp>=3.8.0',
+        'aiofiles>=0.8.0',
     ],
+    extras_require={
+        'vec': [
+            'sqlite-vec',
+            'numpy',
+            'umap-learn',
+        ]
+    },
     entry_points={
         "console_scripts": [
             "sqless=sqless.server:main",
