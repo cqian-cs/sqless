@@ -1,6 +1,6 @@
 # sqless
 
-[English Version](README.md) | [中文版](README_zh.md)
+[English](README.md) | [中文版](README_zh.md)
 
 一个 **schema 灵活、零抽象** 的 SQLite 接口，支持 **关系表、JSON表、全文搜索和语义搜索**。
 
