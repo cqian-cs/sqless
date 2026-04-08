@@ -4,6 +4,8 @@
 
 一个 **schema 灵活、零抽象** 的 SQLite 接口，支持 **关系表、JSON表、全文搜索和语义搜索**。
 
+![:@sqless](https://count.getloli.com/get/@sqless?theme=booru-lewd)
+
 ---
 
 ## sqless好在哪

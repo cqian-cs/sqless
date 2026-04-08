@@ -4,6 +4,8 @@
 
 A **schema-flexible, zero-abstraction SQLite interface** supporting **Relational tables, JSON tables, Full-Text Search, and Semantic Search**.
 
+![:@sqless](https://count.getloli.com/get/@sqless?theme=booru-lewd)
+
 ---
 
 ## Why sqless is special
