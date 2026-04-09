@@ -292,7 +292,7 @@ class DBS:
 
     def get_table(self, db_table):
         db_key, table_name = os.path.split(db_table.replace('-', '/'))
-        db = self.get_db(db_key)
+        db = self.get_db(db_key or 'default')
         if db is None:
             return None
         return db.get_table(table_name)
