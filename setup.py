@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="sqless",
-    version="3.0.1",
+    version="3.0.2",
     author="cqian.cs",
     author_email="cqian.cs@qq.com",
     description="A schema-flexible, zero-abstraction SQLite interface supporting Relational tables, JSON tables, Full-Text Search, and Semantic Search.",

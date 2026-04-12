@@ -110,9 +110,10 @@ def parse_where(where_str, use_json_path=True):
                 params.append(val)
 
         i += 3
-
-    sql = "where " + " ".join(sql_parts)
-
+    if sql_parts:
+        sql = "where " + " ".join(sql_parts)
+    else:
+        sql = ''
     if order_part:
         order_cols = []
         for part in order_part.split(','):
