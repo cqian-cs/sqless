@@ -2,7 +2,7 @@
 sqless - A schema-flexible, zero-abstraction SQLite interface supporting Relational tables, JSON tables, Full-Text Search, and Semantic Search.
 """
 
-__version__ = "3.0.2"
+__version__ = "3.1.0"
 __author__ = "cqian.cs"
 __email__ = "cqian.cs@qq.com"
 

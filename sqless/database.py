@@ -25,7 +25,43 @@ def parse_col(col):
         return col
     return f"data->>'$.{col}'"
 
-
+def parse_selection(s,use_json_path=False):
+    if re.match(r'^[A-Za-z_\u2E80-\u9FFF][A-Za-z0-9_\u2E80-\u9FFF]*$', s):
+        return True, parse_col(s) if use_json_path else s
+    if re.search(r'(;|\-\-|/\*|\*/)', s):
+        return False, f"Invalid selection: {s}"
+    ret = re.match(r'^(abs|round|ceil|floor|random|sign|count|sum|avg|min|max|total)\(([A-Za-z0-9\.+\-*/()]*)\)$',s)
+    if ret:
+        func = ret.group(1).strip()
+        text = ret.group(2).strip()
+        if text == '*':
+            return True, f"{func}({text})"
+        keys_map = {
+            'q': ['o'],
+            'o': ['q', 'w', 'n'],
+            'w': ['o'],
+            'n': ['o']
+        }
+        candidate_keys = ['q','w','n']
+        pattern = r"""
+            (?P<q>[\(\)]) |
+            (?P<o>[+\-*/]) |
+            (?P<w>[A-Za-z_\u2E80-\u9FFF][A-Za-z0-9_\u2E80-\u9FFF]*) |
+            (?P<n>[0-9][0-9\.]*)
+        """
+        ans = []
+        for ret in re.finditer(pattern,text,re.IGNORECASE | re.VERBOSE):
+            sub_key=ret.lastgroup
+            if sub_key not in candidate_keys:
+                return False, f"Invalid selection: {s}"
+            sub_val=text[ret.start():ret.end()]
+            if sub_key == 'w' and use_json_path:
+                ans.append(parse_col(sub_val))
+            else:
+                ans.append(sub_val)
+            candidate_keys = keys_map[sub_key]
+        return True, f"{func}({' '.join(ans)})"
+    return False, f"Invalid selection: {s}"
 
 
 def parse_where(where_str, use_json_path=True):
@@ -37,9 +73,6 @@ def parse_where(where_str, use_json_path=True):
         (False, error_message, []) on parse error
     """
     allowed_ops = {'=', '==', '!=', '<', '>', '<=', '>=', 'like', 'ilike', 'is', 'in'}
-
-    def valid_identifier(s):
-        return re.match(r'^[A-Za-z_\u2E80-\u9FFF][A-Za-z0-9_\u2E80-\u9FFF]*$', s) is not None
 
     if not where_str:
         return True, '', []
@@ -90,10 +123,9 @@ def parse_where(where_str, use_json_path=True):
 
         _col, op, _val = tokens[i], tokens[i + 1].lower(), tokens[i + 2]
 
-        if not valid_identifier(_col):
-            return False, f"Invalid column name: {_col}", []
-
-        col = parse_col(_col) if use_json_path else _col
+        suc, col = parse_selection(_col,use_json_path)
+        if not suc:
+            return False, f"Invalid selection: {_col}"
 
         if op not in allowed_ops:
             return False, f"Operator not allowed: {op}", []
@@ -121,15 +153,15 @@ def parse_where(where_str, use_json_path=True):
             if not items:
                 continue
             _col = items[0]
-            colname = parse_col(_col) if use_json_path else _col
-            if not valid_identifier(_col):
-                return False, f"Invalid order column: {_col}", []
+            suc, selection = parse_selection(_col,use_json_path)
+            if not suc:
+                return False, f"Invalid order selection: {_col}"
             direction = ''
             if len(items) == 2 and items[1].lower() in ('asc', 'desc'):
                 direction = f" {items[1].lower()}"
             elif len(items) > 2:
                 return False, f"Invalid order clause: {part}", []
-            order_cols.append(f"{colname}{direction}")
+            order_cols.append(f"{selection}{direction}")
         if order_cols:
             sql += " order by " + ", ".join(order_cols)
 
