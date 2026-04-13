@@ -30,11 +30,11 @@ def parse_selection(s,use_json_path=False):
         return True, parse_col(s) if use_json_path else s
     if re.search(r'(;|\-\-|/\*|\*/)', s):
         return False, f"Invalid selection: {s}"
-    ret = re.match(r'^(abs|round|ceil|floor|random|sign|count|sum|avg|min|max|total)\(([A-Za-z0-9\.+\-*/()]*)\)$',s)
+    ret = re.match(r'^(abs|round|ceil|floor|random|sign|count|sum|avg|min|max|total)?\(([A-Za-z0-9\._+\-*/()]*)\)$',s)
     if ret:
-        func = ret.group(1).strip()
-        text = ret.group(2).strip()
-        if text == '*':
+        func = (ret.group(1) or '').strip()
+        text = (ret.group(2) or '').strip()
+        if text == '*' or text == '':
             return True, f"{func}({text})"
         keys_map = {
             'q': ['o'],
@@ -125,7 +125,7 @@ def parse_where(where_str, use_json_path=True):
 
         suc, col = parse_selection(_col,use_json_path)
         if not suc:
-            return False, f"Invalid selection: {_col}"
+            return False, f"Invalid selection: {_col}", []
 
         if op not in allowed_ops:
             return False, f"Operator not allowed: {op}", []
@@ -155,7 +155,7 @@ def parse_where(where_str, use_json_path=True):
             _col = items[0]
             suc, selection = parse_selection(_col,use_json_path)
             if not suc:
-                return False, f"Invalid order selection: {_col}"
+                return False, f"Invalid order selection: {_col}", []
             direction = ''
             if len(items) == 2 and items[1].lower() in ('asc', 'desc'):
                 direction = f" {items[1].lower()}"
