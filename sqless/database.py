@@ -228,6 +228,7 @@ class DB:
     def close(self):
         if self.conn:
             self.conn.close()
+            self.conn = None
 
     def drop_table(self, table_name):
         if not valid_identifier(table_name):
