@@ -2,7 +2,7 @@ import orjson
 import re
 from typing import List, Literal
 
-from .database import parse_where
+from .database import parse_where,retry_on_db_lock
 from .json_table import JsonTable
 
 anyword_re = re.compile(r'[\u2E80-\u9FFF]|[A-Za-z0-9_]+|[^\sA-Za-z0-9_\u2E80-\u9FFF]')
@@ -39,7 +39,8 @@ class FtsTable(JsonTable):
             return True, 'ok'
         except Exception as e:
             return False, f"Ensuring fields error: {e}({sql})"
-
+    
+    @retry_on_db_lock(max_retries=6, base_delay=0.05)
     def upsert(self, key_values: dict, is_delta=False):
         table = self.name
         processed_key_values = self.pre_upsert(key_values) if is_delta else key_values

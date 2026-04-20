@@ -1,6 +1,6 @@
 from typing import List, Literal
 
-from .database import parse_where
+from .database import parse_where,retry_on_db_lock
 import orjson
 
 BATCH_SIZE_WRITE = 100_000
@@ -77,6 +77,7 @@ class JsonTable:
             processed_key_values[key] = new_value
         return processed_key_values
 
+    @retry_on_db_lock(max_retries=6, base_delay=0.05)
     def upsert(self, key_values: dict, is_delta=False):
         table = self.name
         processed_key_values = self.pre_upsert(key_values) if is_delta else key_values
@@ -129,6 +130,7 @@ class JsonTable:
             print(f"DB_ERROR|{e}({sql}){values}")
         return items
 
+    @retry_on_db_lock(max_retries=6, base_delay=0.05)
     def _get_items_tempjoin(self,keys):
         cursor = self.db.conn.cursor()
         items = {k: {'key': k, 'data': None, 'updated_at': None} for k in keys}

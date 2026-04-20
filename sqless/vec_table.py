@@ -10,7 +10,7 @@ import sqlite_vec
 import numpy as np
 import aiohttp
 import asyncio
-from .database import parse_where
+from .database import parse_where,retry_on_db_lock
 from .json_table import JsonTable
 
 
@@ -175,6 +175,7 @@ class VecTable(JsonTable):
             print(f"DB_ERROR|{e}({sql}){values}")
             return {'suc': False, 'data': str(e), 'debug': sql}
 
+    @retry_on_db_lock(max_retries=6, base_delay=0.05)
     def upsert(self, key_values: dict, is_delta=False):
         processed_key_values = self.pre_upsert(key_values) if is_delta else key_values
         if len(processed_key_values) == 0:
@@ -186,6 +187,7 @@ class VecTable(JsonTable):
         key_vecs = ret['data']
         return self._upsert(key_texts, key_vecs)
 
+    @retry_on_db_lock(max_retries=6, base_delay=0.05)
     async def async_upsert(self, key_values: dict, is_delta=False):
         processed_key_values = self.pre_upsert(key_values) if is_delta else key_values
         if len(processed_key_values) == 0:

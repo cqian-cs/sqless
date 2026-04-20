@@ -167,7 +167,24 @@ def parse_where(where_str, use_json_path=True):
 
     return True, sql, params
 
-
+import functools
+import time
+def retry_on_db_lock(max_retries=5, base_delay=0.05):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except sqlite3.OperationalError as e:
+                    if "locked" in str(e).lower() and attempt < max_retries - 1:
+                        sleep_time = base_delay * (2 ** attempt) 
+                        time.sleep(sleep_time)
+                        continue
+                    raise
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 identifier_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_\-]*[A-Za-z0-9]$")
@@ -195,7 +212,7 @@ class DB:
     def __init__(self, path_db=f"{path_this}/util_db_vec.sqlite", wal=True):
         self.path = os.path.realpath(path_db)
         os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        self.conn = sqlite3.connect(self.path, detect_types=sqlite3.PARSE_DECLTYPES)
+        self.conn = sqlite3.connect(self.path, detect_types=sqlite3.PARSE_DECLTYPES, timeout=15.0)
         self.tables = {}
         if _sqlite_vec_available:
             self.conn.enable_load_extension(True)
@@ -203,6 +220,8 @@ class DB:
         if wal:
             cursor = self.conn.cursor()
             cursor.execute("PRAGMA journal_mode = WAL;")
+            cursor.execute("PRAGMA synchronous = NORMAL;")
+            cursor.execute("PRAGMA cache_size = -8000;")
             self.conn.commit()
 
     def __del__(self):

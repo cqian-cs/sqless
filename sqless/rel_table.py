@@ -1,6 +1,6 @@
 from typing import List, Literal
 import orjson,pickle
-from .database import parse_where, valid_identifier
+from .database import parse_where, valid_identifier, retry_on_db_lock
 
 type_map = {
     str: 'TEXT',
@@ -134,6 +134,7 @@ class RelTable:
             return v
         return encode(v)
 
+    @retry_on_db_lock(max_retries=6, base_delay=0.05)
     def upsert(self, key_values: dict):
         if not key_values:
             return {'suc': True, 'data': "update 0 items."}
@@ -173,7 +174,7 @@ class RelTable:
                     values_mat.append(row)
                 cursor.executemany(sql, values_mat)
                 total += len(items)
-            self.db.conn.commit()
+                self.db.conn.commit()
             return {'suc': True, 'data': f"update {total} items."}
         except Exception as e:
             print(f"DB_ERROR|{e}")
