@@ -59,7 +59,7 @@ class RelTable:
         table = self.name
         try:
             cursor = self.db.conn.cursor()
-            sql = f"CREATE TABLE IF NOT EXISTS {table} (key TEXT PRIMARY KEY);"
+            sql = f"CREATE TABLE IF NOT EXISTS {table} (key TEXT PRIMARY KEY) WITHOUT ROWID;"
             cursor.execute(sql)
             self.db.conn.commit()
             return True, 'ok'
