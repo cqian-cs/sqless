@@ -181,7 +181,8 @@ def retry_on_db_lock(max_retries=5, base_delay=0.05):
                         sleep_time = base_delay * (2 ** attempt) 
                         time.sleep(sleep_time)
                         continue
-                    raise
+                    else:
+                        raise
             return func(*args, **kwargs)
         return wrapper
     return decorator
