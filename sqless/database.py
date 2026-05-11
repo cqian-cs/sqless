@@ -96,7 +96,7 @@ def parse_where(where_str, use_json_path=True):
         ("[^"]*") |
         ('[^']*') |
         (\bAND\b|\bOR\b|\bNOT\b) |
-        (<=|>=|!=|==|=|<|>|like|ilike|is|in) |
+        \b(<=|>=|!=|==|=|<|>|like|ilike|is|in)\b |
         ([^\s()]+)
     """
     tokens = [t for t in re.findall(token_pattern, where_part, re.IGNORECASE | re.VERBOSE)]

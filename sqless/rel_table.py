@@ -231,7 +231,7 @@ class RelTable:
             print(f"DB_ERROR|{e}({sql}){values}")
             return None
 
-    def iter(self, where='', select=None, limit=0, offset=0):
+    def iter(self, where='', select=None, limit=0, offset=0, mat_mode=False):
         table = self.name
         if select is None:
             fields = '*'
@@ -254,11 +254,16 @@ class RelTable:
             cursor = self.db.conn.cursor()
             cursor.execute(sql, values)
             columns = [desc[0] for desc in cursor.description]
-            for row in cursor:
-                if single:
-                    yield decode(row[0])
-                else:
-                    yield {k: decode(v) for k, v in zip(columns, row)}
+            if mat_mode and not single:
+                yield columns
+                for row in cursor:
+                    yield [decode(v) for v in row]
+            else:
+                for row in cursor:
+                    if single:
+                        yield decode(row[0])
+                    else:
+                        yield {k: decode(v) for k, v in zip(columns, row)}
         except Exception as e:
             print(f"DB_ERROR|{e}({sql},{values})")
             return None
