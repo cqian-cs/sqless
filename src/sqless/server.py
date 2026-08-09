@@ -115,10 +115,7 @@ async def run_server(
     import time
     import traceback
     path_src = os.path.dirname(os.path.abspath(__file__))
-    num2time = lambda t=None, f="%Y%m%d-%H%M%S": time.strftime(f, time.localtime(int(t if t else time.time())))
-    tspToday = lambda: int(time.time() // 86400 * 86400 - 8 * 3600)  # UTC+8 today midnight
-
-    identifier_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_\-]*[A-Za-z0-9]$")
+    num2time =  lambda:time.strftime("%Y%m%d-%H%M%S")
     if not secret:
         print("[ERROR] Please set SQLESS_SECRET environment variable or pass --secret <secret>")
         return
@@ -196,7 +193,7 @@ if __name__=='__main__':
                 )
             return web.Response(status=401,text='Unauthorized',headers={'WWW-Authenticate': 'Basic realm="sqless API"'})
         return middleware_handler
-
+    
     async def handle_post_db(request):
         db_table = request.match_info['db_table']
         if request.content_type == 'application/json':
@@ -237,7 +234,7 @@ if __name__=='__main__':
         offset = (page - 1) * limit
         print(f"[{num2time()}]{request['client_ip']}|GET {db_table}|{where}?page={page}&per_page={limit}")
         items = list(table.iter(where=where, limit=limit, offset=offset))
-        cnt = table.count(where)
+        cnt = table.count(where) or 0
         ret = {'suc': True, 'data': items, 'count': cnt}
         if limit > 0:
             ret['max_page'], rest = divmod(cnt, limit)

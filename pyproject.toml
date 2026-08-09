@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sqless"
+dynamic = ["version"]
+description = 'A schema-flexible, zero-abstraction SQLite interface supporting Relational tables, JSON tables, Full-Text Search, and Semantic Search.'
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "cqian-cs", email = "cqian.cs@qq.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+  "orjson>=3.6.0"
+]
+
+[project.urls]
+Documentation = "https://github.com/cqian-cs/sqless#readme"
+Issues = "https://github.com/cqian-cs/sqless/issues"
+Source = "https://github.com/cqian-cs/sqless"
+
+[tool.hatch.version]
+path = "src/sqless/__init__.py"

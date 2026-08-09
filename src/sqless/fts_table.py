@@ -114,7 +114,7 @@ class FtsTable(JsonTable):
     def iter(self,
              where='',
              select: List[Literal['key', 'data', 'text', 'updated_at']] = None,
-             limit=0, offset=0
+             limit=0, offset=0, mat_mode=None
              ):
         if not select:
             select = ['key', 'data']

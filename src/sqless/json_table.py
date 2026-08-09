@@ -163,7 +163,7 @@ class JsonTable:
     def iter(self,
              where='',
              select: List[Literal['key', 'data', 'updated_at']] = None,
-             limit=0, offset=0
+             limit=0, offset=0, mat_mode=None
              ):
         if not select:
             select = ['key', 'data', 'updated_at']

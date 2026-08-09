@@ -329,7 +329,7 @@ class VecTable(JsonTable):
     def iter(self,
              where='',
              select: List[str] = None,
-             limit=0, offset=0
+             limit=0, offset=0, mat_mode=None
              ):
         from typing import Literal
         if not select:
