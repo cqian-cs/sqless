@@ -81,7 +81,6 @@ class JsonTable:
     def upsert(self, key_values: dict, is_delta=False):
         table = self.name
         processed_key_values = self.pre_upsert(key_values) if is_delta else key_values
-        processed_key_values = key_values
         if len(processed_key_values) == 0:
             return {'suc': True, 'data': "update 0 items."}
         key_texts = {k: orjson.dumps(v).decode('utf-8') for k, v in processed_key_values.items()}

@@ -1,25 +1,25 @@
 import os
 import asyncio
 import sqless
+path_this :str = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
 
-# --- Paths & Configuration ---
+cfg = {
+    'host': '127.0.0.1',
+    'port': 12239,
+    'secret': 'abcdefghijklmnopqrstuvwxyz',
+    'path_base_db': os.path.realpath(f"{path_this}/db"),
+    'path_base_fs': os.path.realpath(f"{path_this}/fs"),
+    'path_base_www': os.path.realpath(f"{path_this}/www"),
+    'max_filesize': 200,  # Max file size (in MB) allowed
+    'open_get_prefix': [
+        '/fs/data',  # allow GET /fs/xxx to fetch f"{path_base_fs}/xxx" without secret
+        '/api/hello' # allow GET /api/hello without secret
+    ]
+}
 
-path_this :str = os.path.dirname(os.path.abspath(__file__))
-path_base_db :str = os.path.realpath(f"{path_this}/db")
-path_base_fs :str = os.path.realpath(f"{path_this}/fs")
-path_base_www :str = os.path.realpath(f"{path_this}/www")
+# --- Database Initialization ---
 
-max_filesize :int = 200  # Max file size (in MB) allowed in POST /fs
-
-open_get_prefix :list = [
-    '/fs/data',  # allow GET /fs/xxx to fetch f"{path_base_fs}/xxx" without secret
-    '/api/hello' # allow GET /api/hello without secret
-]
-
-# --- Database & MCP Server Initialization ---
-
-dbs = sqless.DBS(path_base_db)
-
+dbs = sqless.DBS(cfg['path_base_db'])
 
 # --- MCP Tools / API Functions ---
 
@@ -43,7 +43,6 @@ def get_time(timezone: str) -> str:
 
 # Async demo with semaphore (limit concurrent invocations)
 semaphore_sleep = asyncio.Semaphore(3)
-
 @sqless.api
 async def sleep(seconds: int) -> str:
     """Sleep for given seconds, demonstrating rate limiting"""
@@ -55,12 +54,23 @@ async def sleep(seconds: int) -> str:
         t2 = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return f"Slept for {seconds} seconds, arrive at {t0}, start at {t1}, finish at {t2}"
 
+
+
 # --- Usage Notes ---
 """
 MCP usage:
-    URL: http://127.0.0.1:12239/mcp
-    Header: Authorization: Bearer <secret>
-    
+{
+  "mcpServers": {
+    "<mcp_name>": {
+      "type": "http",
+      "url": "http://127.0.0.1:12239/mcp",
+      "headers": {
+        "Authorization": "Bearer <secret>"
+      }
+    }
+  }
+}
+
 API usage:
     GET example:
         curl -H "Authorization: Bearer <secret>" \
@@ -79,3 +89,6 @@ Browser usage:
 Claude Code usage:
     claude mcp add --transport http <mcp_name> http://127.0.0.1:12239/mcp --header "Authorization: Bearer <secret>"
 """
+
+if __name__=='__main__':
+    asyncio.run(sqless.run_server(__file__))

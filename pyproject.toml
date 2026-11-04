@@ -33,3 +33,6 @@ Source = "https://github.com/cqian-cs/sqless"
 
 [tool.hatch.version]
 path = "src/sqless/__init__.py"
+
+[project.scripts]
+sqless = "sqless.server:main"

@@ -1,62 +1,59 @@
 import os
 from .database import DBS
-
-# ---------- Configuration (use env vars in production) ----------
-DEFAULT_SECRET = os.environ.get("SQLESS_SECRET", None)
-
 import inspect
 from typing import get_origin, get_args, Literal, List
 func_table = {}
 tools = []
 def api(func):
     """函数装饰器，用于将一个普通Python函数转换为MCP工具的JSON Schema定义。"""
-    properties = {}
-    required_params = []
-    params = []
-    for name, param in inspect.signature(func).parameters.items():
-        params.append(name)
-        param_schema = {}
-        py_type = param.annotation
-        param_schema["type"] = {
-            int:'integer',
-            float:'number',
-            bool:'boolean',
-            str:'string',
-            inspect._empty:'string'
-        }.get(py_type)
-        if not param_schema["type"]:
-            origin = get_origin(py_type)
-            args = get_args(py_type)
-            if origin is Literal:
-                param_schema["type"] = type(args[0]).__name__
-                param_schema["enum"] = list(args)
-            elif origin is list:
-                param_schema["type"] = "array"
-                item_type = args[0] if args else str
-                if item_type is int: param_schema["items"] = {"type": "integer"}
-                elif item_type is float: param_schema["items"] = {"type": "number"}
-                elif item_type is bool: param_schema["items"] = {"type": "boolean"}
-                else: param_schema["items"] = {"type": "string"}
+    if func.__name__ not in func_table:
+        properties = {}
+        required_params = []
+        params = []
+        for name, param in inspect.signature(func).parameters.items():
+            params.append(name)
+            param_schema = {}
+            py_type = param.annotation
+            param_schema["type"] = {
+                int:'integer',
+                float:'number',
+                bool:'boolean',
+                str:'string',
+                inspect._empty:'string'
+            }.get(py_type)
+            if not param_schema["type"]:
+                origin = get_origin(py_type)
+                args = get_args(py_type)
+                if origin is Literal:
+                    param_schema["type"] = type(args[0]).__name__
+                    param_schema["enum"] = list(args)
+                elif origin is list:
+                    param_schema["type"] = "array"
+                    item_type = args[0] if args else str
+                    if item_type is int: param_schema["items"] = {"type": "integer"}
+                    elif item_type is float: param_schema["items"] = {"type": "number"}
+                    elif item_type is bool: param_schema["items"] = {"type": "boolean"}
+                    else: param_schema["items"] = {"type": "string"}
+                else:
+                    param_schema["type"] = "object"
+            if param.default is not inspect._empty:
+                param_schema["default"] = param.default
             else:
-                param_schema["type"] = "object"
-        if param.default is not inspect._empty:
-            param_schema["default"] = param.default
-        else:
-            required_params.append(name)
-        properties[name] = param_schema
-    input_schema = {
-        "type": "object",
-        "properties": properties,
-    }
-    if required_params:
-        input_schema["required"] = required_params
-    mcp_definition = {
-        "name": func.__name__,
-        "description": func.__doc__,
-        "inputSchema": input_schema
-    }
-    tools.append(mcp_definition)
-    func_table[func.__name__]={'f':func,'async':inspect.iscoroutinefunction(func),'params':params}
+                required_params.append(name)
+            properties[name] = param_schema
+        input_schema = {
+            "type": "object",
+            "properties": properties,
+        }
+        if required_params:
+            input_schema["required"] = required_params
+        mcp_definition = {
+            "name": func.__name__,
+            "description": func.__doc__ or "",
+            "inputSchema": input_schema
+        }
+        tools.append(mcp_definition)
+        func_table[func.__name__]={'f':func,'async':inspect.iscoroutinefunction(func),'params':params}
     def wrapper(*args,**kwargs):
         return func(*args,**kwargs)
     wrapper.__name__ = func.__name__
@@ -99,11 +96,8 @@ def split(s, sep=',', L="{[(\"'", R="}])\"'"):
 
 
 async def run_server(
-    host='0.0.0.0',
-    port=27018,
-    secret=DEFAULT_SECRET,
-    path_this = os.getcwd(),
-    path_cfg = 'sqless_config.py',
+    path_app = 'sqless_app.py',
+    reset = False,
 ):
     import re
     import base64
@@ -114,62 +108,52 @@ async def run_server(
     import ast
     import time
     import traceback
+    Now = lambda: time.strftime("%Y%m%d-%H%M%S")
+    path_this = os.path.dirname(os.path.abspath(path_app))
+    os.makedirs(path_this,exist_ok=True)
+    # cold-start
     path_src = os.path.dirname(os.path.abspath(__file__))
-    num2time =  lambda:time.strftime("%Y%m%d-%H%M%S")
-    if not secret:
-        print("[ERROR] Please set SQLESS_SECRET environment variable or pass --secret <secret>")
-        return
-
-    path_cfg = os.path.abspath(path_cfg)
-    if not os.path.exists(path_cfg):
-        os.makedirs(os.path.dirname(path_cfg),exist_ok=True)
-        with open(f"{path_src}/sqless_config.py",'r',encoding='utf-8') as f:
-            txt = f.read()
-        with open(path_cfg,'w',encoding='utf-8') as f:
-            f.write(txt)
-            f.write(f"""
-# --- start sqless server ---
-if __name__=='__main__':
-    asyncio.run(sqless.run_server(
-        host='{host}',
-        port={port},
-        secret='{secret}',
-        path_this = path_this,
-        path_cfg = '{os.path.split(path_cfg)[1]}',
-    ))
-""")
-    cfg_name = os.path.splitext(os.path.split(path_cfg)[1])[0]
+    if reset:
+        filename,ext = os.path.splitext(path_app)
+        os.rename(path_app,f"{filename}_bk-{Now()}{ext}")
+    if not os.path.exists(path_app):
+        with open(path_app,'w',encoding='utf-8') as fo:
+            with open(f"{path_src}/sqless_app_example.py",'r',encoding='utf-8') as fi:
+                fo.write(fi.read())
     import importlib, sys
     sys.path.append(path_this)
-    cfg = importlib.import_module(cfg_name)
-    path_base_db = cfg.path_base_db if hasattr(cfg,'path_base_db') else os.path.realpath(f"{path_this}/db")
-    path_base_fs = cfg.path_base_fs if hasattr(cfg,'path_base_fs') else os.path.realpath(f"{path_this}/fs")
-    path_base_www= cfg.path_base_www if hasattr(cfg,'path_base_www') else os.path.realpath(f"{path_this}/www")
-    max_filesize = cfg.max_filesize if hasattr(cfg,'max_filesize') else 200 # MB
-    open_get_prefix = tuple(cfg.open_get_prefix) if hasattr(cfg,'open_get_prefix') else tuple([])
-    dbs = cfg.dbs if hasattr(cfg,'dbs') else DBS(path_base_db)
+    app_name = os.path.splitext(os.path.split(path_app)[1])[0]
+    app = importlib.import_module(app_name)
+    cfg = app.cfg if hasattr(app,'cfg') else {}
+    host = cfg.get('host','127.0.0.1')
+    port = cfg.get('port',12239)
+    secret = cfg.get('secret','abcdefghijklmnopqrstuvwxyz')
+    path_base_db = cfg.get('path_base_db',f"{path_this}/db")
+    path_base_fs = cfg.get('path_base_fs',f"{path_this}/fs")
+    path_base_www= cfg.get('path_base_www',f"{path_this}/www")
+    max_filesize= cfg.get('max_filesize',200)
+    open_get_prefix= tuple(cfg.get('open_get_prefix',[]))
+    # Server middlewware
+    dbs = app.dbs if hasattr(app,'dbs') else DBS(path_base_db)
     print(f"path_base_db: {path_base_db}")
     print(f"path_base_fs: {path_base_fs}")
     print(f"path_base_www: {path_base_www}")
     print(f"open_get_prefix: {open_get_prefix}")
-
     allowed_auth_header = [
         f'Bearer {secret}',
         f"Basic {base64.b64encode((':'+secret).encode('utf-8')).decode('utf-8')}",
     ]
     async def cors_middleware(app, handler):
         async def middleware_handler(request):
-        # 1. 检查是否是预检请求
             if request.method == 'OPTIONS':
                 response = web.Response(status=204)
                 response.headers['Access-Control-Allow-Origin'] = '*'
                 response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
                 response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
                 return response
-
-            # 2. 对于非 OPTIONS 请求，正常处理
             response = await handler(request)
-            response.headers['Access-Control-Allow-Origin'] = '*'
+            if response is not None:
+                response.headers['Access-Control-Allow-Origin'] = '*'
             return response
         return middleware_handler
     async def auth_middleware(app, handler):
@@ -209,7 +193,7 @@ if __name__=='__main__':
         table = dbs[db_table]
         if table is None:
             return web.Response(body=orjson.dumps({'suc': False, 'data': 'invalid db/table'}), content_type='application/json')
-        print(f"[{num2time()}]{request['client_ip']}|POST {db_table}|{data}")
+        print(f"[{Now()}]{request['client_ip']}|POST {db_table}|{data}")
         ret = table.upsert({key: data})
         return web.Response(body=orjson.dumps(ret), content_type='application/json')
 
@@ -219,7 +203,7 @@ if __name__=='__main__':
         table = dbs[db_table]
         if table is None:
             return web.Response(body=orjson.dumps({'suc': False, 'data': 'invalid db/table'}), content_type='application/json')
-        print(f"[{num2time()}]{request['client_ip']}|DELETE {db_table}|{where}")
+        print(f"[{Now()}]{request['client_ip']}|DELETE {db_table}|{where}")
         ret = table.delete(where)
         return web.Response(body=orjson.dumps(ret), content_type='application/json')
 
@@ -232,7 +216,7 @@ if __name__=='__main__':
         page = max(int(request.query.get('page', 1)), 1)
         limit = min(max(int(request.query.get('per_page', 20)), 0), 100)
         offset = (page - 1) * limit
-        print(f"[{num2time()}]{request['client_ip']}|GET {db_table}|{where}?page={page}&per_page={limit}")
+        print(f"[{Now()}]{request['client_ip']}|GET {db_table}|{where}?page={page}&per_page={limit}")
         items = list(table.iter(where=where, limit=limit, offset=offset))
         cnt = table.count(where) or 0
         ret = {'suc': True, 'data': items, 'count': cnt}
@@ -250,14 +234,14 @@ if __name__=='__main__':
         if suc:
             if os.path.isfile(path_file):
                 if request.query.get('check') is not None:
-                    print(f"[{num2time()}]{request['client_ip']}|CHECK {path_file}")
+                    print(f"[{Now()}]{request['client_ip']}|CHECK {path_file}")
                     return web.Response(body=orjson.dumps({'suc': True}), content_type='application/json')
                 else:
-                    print(f"[{num2time()}]{request['client_ip']}|DOWNLOAD {path_file}")
+                    print(f"[{Now()}]{request['client_ip']}|DOWNLOAD {path_file}")
                     return web.FileResponse(path_file)
             elif os.path.isdir(path_file):
                 if request.query.get('check') is not None:
-                    print(f"[{num2time()}]{request['client_ip']}|CHECK {path_file}")
+                    print(f"[{Now()}]{request['client_ip']}|CHECK {path_file}")
                     return web.Response(body=orjson.dumps({'suc': True, 'data':sorted(os.listdir(path_file),key=natural_sort_key)}), content_type='application/json')
         if request.query.get('check') is not None:
             return web.Response(body=orjson.dumps({'suc': False}), content_type='application/json')
@@ -267,7 +251,7 @@ if __name__=='__main__':
     async def handle_post_fs(request):
         try:
             suc, path_file = check_path(f"{path_base_fs}/{request.match_info['path_file']}", path_base_fs)
-            print(f"[{num2time()}]{request['client_ip']}|UPLOAD attempt {suc} {path_file}")
+            print(f"[{Now()}]{request['client_ip']}|UPLOAD attempt {suc} {path_file}")
             if not suc:
                 return web.Response(body=orjson.dumps({'suc': False, 'data': 'Unsafe path'}), content_type='application/json')
             folder = os.path.dirname(path_file)
@@ -341,14 +325,11 @@ if __name__=='__main__':
         response.headers['Cache-Control'] = 'no-cache'
         response.headers['X-Accel-Buffering'] = 'no'
         await response.prepare(request)
-
         try:
             data = await request.json()
-
             request_method = data.get("method")
             request_id = data.get("id")
             params = data.get("params", {})
-
             response_body = {"jsonrpc": "2.0", "id": request_id}
             if request_method == "initialize":
                 response_body["result"] = {
@@ -369,6 +350,9 @@ if __name__=='__main__':
                         response_body["error"] = {"code": -32603, "message": str(tool_error)}
                 else:
                     response_body["error"] = {"code": -32601, "message": f"Tool not found: {tool_name}"}
+            elif request_method == "notifications/initialized":
+                await response.write_eof()
+                return response
             else:
                 response_body["error"] = {"code": -32601, "message": "Method not found"}
             message = f"event: message\ndata: {orjson.dumps(response_body).decode()}\n\n"
@@ -393,7 +377,7 @@ if __name__=='__main__':
     async def call_once(func,kwargs,clinet_ip,_serial_number=[0]):
         serial_number = _serial_number[0]
         _serial_number[0] += 1
-        print(f"[{num2time()}]{clinet_ip}|FUNC CALL[{serial_number}] {func['f'].__name__} {kwargs}")
+        print(f"[{Now()}]{clinet_ip}|FUNC CALL[{serial_number}] {func['f'].__name__} {kwargs}")
         try:
             if func['async']:
                 ret = await func['f'](**kwargs)
@@ -401,7 +385,11 @@ if __name__=='__main__':
                 ret = func['f'](**kwargs)
         except Exception as e:
             ret = {'suc':False,'data':f"Tool exception: {e}"}
-        print(f"[{num2time()}]{clinet_ip}|FUNC RETURN[{serial_number}] {ret}")
+            with open(f"{path_this}/sqless_exception.log",'a',encoding='utf-8') as f:
+                f.write(f"[{Now()}]{clinet_ip}|FUNC CALL[{serial_number}] Exception ({e})\n{func['f'].__name__} {kwargs}\n")
+                f.write(traceback.format_exc())
+                f.write('\n')
+        print(f"[{Now()}]{clinet_ip}|FUNC RETURN[{serial_number}] {ret}")
         return ret
     async def handle_get_api(request):
         func_args = request.match_info.get('func_args')
@@ -423,7 +411,7 @@ if __name__=='__main__':
         while not task.done():
             await asyncio.sleep(0.1)
             if request.transport is None or request.transport.is_closing():
-                print(f"[{num2time()}]{request['client_ip']}|CANCEL {'async ' if func['async'] else ''}{func_name}")
+                print(f"[{Now()}]{request['client_ip']}|CANCEL {'async ' if func['async'] else ''}{func_name}")
                 task.cancel()
                 return
         ret = await task
@@ -447,32 +435,39 @@ if __name__=='__main__':
         while not task.done():
             await asyncio.sleep(0.1)
             if request.transport is None or request.transport.is_closing():
-                print(f"[{num2time()}]{request['client_ip']}|CANCEL {'async ' if func['async'] else ''}{func_name}({info_params})")
+                print(f"[{Now()}]{request['client_ip']}|CANCEL {'async ' if func['async'] else ''}{func_name}({info_params})")
                 task.cancel()
                 return
         ret = await task
         return web.Response(body=orjson.dumps(ret), content_type='application/json')
 
 
-    app = web.Application(middlewares=[cors_middleware,auth_middleware], client_max_size=max_filesize * 1024 ** 2)
-    app.router.add_post('/db/{db_table}', handle_post_db)
-    app.router.add_get('/db/{db_table}/{where:.*}', handle_get_db)
-    app.router.add_delete('/db/{db_table}/{where:.*}', handle_delete_db)
-    app.router.add_get('/fs/{path_file:.*}', handle_get_fs)
-    app.router.add_post('/fs/{path_file:.*}', handle_post_fs)
-    app.router.add_post('/xmlhttpRequest', handle_xmlhttpRequest)
-    app.router.add_get('/api/{func_args:.*}',handle_get_api)
-    app.router.add_post('/api',handle_post_api)
-    app.router.add_post('/mcp',handle_mcp_request)
-    app.router.add_get('/mcp_tools',lambda r:web.Response(body=orjson.dumps(tools), content_type='application/json'))
-    app.router.add_get('/{file:.*}', handle_static)
-
-    runner = web.AppRunner(app)
+    web_app = web.Application(middlewares=[cors_middleware,auth_middleware], client_max_size=max_filesize * 1024 ** 2)
+    web_app.router.add_post('/db/{db_table}', handle_post_db)
+    web_app.router.add_get('/db/{db_table}/{where:.*}', handle_get_db)
+    web_app.router.add_delete('/db/{db_table}/{where:.*}', handle_delete_db)
+    web_app.router.add_get('/fs/{path_file:.*}', handle_get_fs)
+    web_app.router.add_post('/fs/{path_file:.*}', handle_post_fs)
+    web_app.router.add_post('/xmlhttpRequest', handle_xmlhttpRequest)
+    web_app.router.add_get('/api/{func_args:.*}',handle_get_api)
+    web_app.router.add_post('/api',handle_post_api)
+    web_app.router.add_post('/mcp',handle_mcp_request)
+    web_app.router.add_get('/mcp_tools',lambda r:web.Response(body=orjson.dumps(tools), content_type='application/json'))
+    web_app.router.add_get('/{file:.*}', handle_static)
+    if hasattr(app,'on_init'):
+        if inspect.iscoroutinefunction(app.on_init):
+            await app.on_init()
+        else:
+            app.on_init()
+    runner = web.AppRunner(web_app)
     await runner.setup()
     site = web.TCPSite(runner, host, port)
     await site.start()
     print(f"Serving on http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}")
     print(f"Serving at {os.path.abspath(path_this)}")
+    print(f"Loaded {len(tools)} tools")
+    for i,tool in enumerate(tools):
+        print(f"  {i+1} {tool['name']} {tool['description'].split('\n')[0]}")
     stop_event = asyncio.Event()
     try:
         while not stop_event.is_set():
@@ -482,26 +477,24 @@ if __name__=='__main__':
     finally:
         print("Cleaning up...")
         await runner.cleanup()
+    if hasattr(app,'on_close'):
+        if inspect.iscoroutinefunction(app.on_close):
+            await app.on_close()
+        else:
+            app.on_close()
 
 def main():
     import argparse
     import asyncio
-    import sys
-
+    
     parser = argparse.ArgumentParser(description='Run the sqless server')
-    parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
-    parser.add_argument('--port', type=int, default=12239, help='Port to bind to (default: 12239)')
-    parser.add_argument('--secret', default=DEFAULT_SECRET, help='Secret for authentication')
-    parser.add_argument('--path', default=os.getcwd(), help=f'Base path for database and file storage (default: {os.getcwd()})')
-    parser.add_argument('--cfg', type=str, default='sqless_config.py', help='Path to configuration file')
+    parser.add_argument('--app', type=str, default='sqless_app.py', help='Path to configuration file')
+    parser.add_argument('--reset', action='store_true', default=False, help='Reset the custom code')
     args = parser.parse_args()
 
     asyncio.run(run_server(
-        host=args.host,
-        port=args.port,
-        secret=args.secret,
-        path_this=args.path,
-        path_cfg = args.cfg
+        path_app=args.app,
+        reset=args.reset,
     ))
 
 if __name__ == "__main__":

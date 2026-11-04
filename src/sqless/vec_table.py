@@ -325,6 +325,35 @@ class VecTable(JsonTable):
         except Exception as e:
             print(f"DB_ERROR|{e}({sql}){values}")
             return {'suc': False, 'data': f"DB_ERROR|{e}({sql}){values}"}
+    
+    async def async_search(self, query, k=5):
+        table = self.name
+        sql = f"""
+            SELECT
+                key,
+                data,
+                updated_at,
+                distance
+            FROM {table}_vec v
+            JOIN {table} t ON t.rowid = v.rowid
+            WHERE vector MATCH ? AND k = ?
+            ORDER BY distance
+        """
+        ret = await async_dict_to_vec({'key': orjson.dumps(query).decode()}, to_bytes=True)
+        if not ret['suc']:
+            return ret
+        values = (ret['data']['key'], k)
+        try:
+            cursor = self.db.conn.cursor()
+            cursor.execute(sql, values)
+            results = [
+                {'key': row[0], 'data': row[1], 'updated_at': row[2],  'distance': row[3]}
+                for row in cursor
+            ]
+            return {'suc': True, 'data': results}
+        except Exception as e:
+            print(f"DB_ERROR|{e}({sql}){values}")
+            return {'suc': False, 'data': f"DB_ERROR|{e}({sql}){values}"}
 
     def iter(self,
              where='',
