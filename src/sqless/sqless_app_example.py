@@ -1,3 +1,4 @@
+# pip install aiohttp aiofiles certifi
 import os
 import asyncio
 import sqless
@@ -16,6 +17,11 @@ cfg = {
         '/api/hello' # allow GET /api/hello without secret
     ]
 }
+async def on_init():
+    print("Enter on_init")
+
+async def on_exit():
+    print("Enter on_exit")
 
 # --- Database Initialization ---
 

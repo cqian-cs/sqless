@@ -64,9 +64,10 @@ def api(func):
 def check_path(path_file, path_base):
     normalized_path = os.path.realpath(path_file)
     try:
-        if os.path.commonpath([path_base, normalized_path]) == path_base:
+        if os.path.commonpath([path_base, normalized_path]).replace('\\','/') == path_base.replace('\\','/'):
             return True, normalized_path
     except Exception as e:
+        print(f"check_path exception: {e}")
         pass
     return False, f"unsafe path: {normalized_path}"
 
@@ -102,7 +103,7 @@ async def run_server(
     import re
     import base64
     import asyncio
-    from aiohttp import web, ClientSession, FormData, ClientTimeout
+    from aiohttp import web, ClientSession, FormData, ClientTimeout, TCPConnector
     import orjson
     import aiofiles
     import ast
@@ -284,6 +285,12 @@ async def run_server(
             return web.FileResponse(f"{path_base_www}/{file}")
         return web.Response(status=404, text="404 Not Found")
 
+    try:
+        import certifi
+        import ssl
+        ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+    except:
+        ssl_ctx = True
     async def handle_xmlhttpRequest(request):
         try:
             data = await request.json()
@@ -308,7 +315,8 @@ async def run_server(
             else:
                 payload = data.get('data')
             timeout = ClientTimeout(total=15)
-            async with ClientSession(timeout=timeout) as session:
+            connector = TCPConnector(ssl=ssl_ctx)
+            async with ClientSession(timeout=timeout,connector=connector) as session:
                 async with session.request(method, url, headers=headers, data=payload, allow_redirects=True) as resp:
                     text = await resp.text()
                     return web.Response(body=orjson.dumps({
@@ -359,21 +367,16 @@ async def run_server(
             await response.write(message.encode('utf-8'))
             await response.write_eof()
             return response
-
         except orjson.JSONDecodeError as e:
             error_body = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}}
             msg = f"event: message\ndata: {orjson.dumps(error_body).decode()}\n\n"
             await response.write(msg.encode('utf-8'))
             return response
-
         except Exception as e:
             error_body = {"jsonrpc": "2.0", "id": data.get("id") if 'data' in locals() else None, "error": {"code": -32603, "message": "Internal error"}}
             msg = f"event: message\ndata: {orjson.dumps(error_body).decode()}\n\n"
             await response.write(msg.encode('utf-8'))
             return response
-
-
-
     async def call_once(func,kwargs,clinet_ip,_serial_number=[0]):
         serial_number = _serial_number[0]
         _serial_number[0] += 1
@@ -416,7 +419,6 @@ async def run_server(
                 return
         ret = await task
         return web.Response(body=orjson.dumps(ret), content_type='application/json')
-
     async def handle_post_api(request):
         if request.content_type == 'application/json':
             kwargs = await request.json()
@@ -440,8 +442,6 @@ async def run_server(
                 return
         ret = await task
         return web.Response(body=orjson.dumps(ret), content_type='application/json')
-
-
     web_app = web.Application(middlewares=[cors_middleware,auth_middleware], client_max_size=max_filesize * 1024 ** 2)
     web_app.router.add_post('/db/{db_table}', handle_post_db)
     web_app.router.add_get('/db/{db_table}/{where:.*}', handle_get_db)
@@ -482,20 +482,16 @@ async def run_server(
             await app.on_close()
         else:
             app.on_close()
-
 def main():
     import argparse
     import asyncio
-    
     parser = argparse.ArgumentParser(description='Run the sqless server')
     parser.add_argument('--app', type=str, default='sqless_app.py', help='Path to configuration file')
     parser.add_argument('--reset', action='store_true', default=False, help='Reset the custom code')
     args = parser.parse_args()
-
     asyncio.run(run_server(
         path_app=args.app,
         reset=args.reset,
     ))
-
 if __name__ == "__main__":
     main()

@@ -219,24 +219,216 @@ print(params) # [10, 12, 14, 'Tom%']
 
 ---
 
-## 🔄 版本变化
+## 🔹 使用sqless开发后端服务
 
-**本次版本新增**：
+sqless内置一个简单务实的后端服务框架。
 
-* `json_` 前缀的JSON表
-* `fts_` 前缀的全文搜索表
-* `vec_` 前缀的语义搜索表
-
----
-
-## 🔹 旧版服务端（已废弃）
-
+### 函数即服务，四种访问方式
+1. 安装依赖
 ```bash
-sqless --host 127.0.0.1 --port 12239 --secret xxx
+pip install aiohttp aiofiles certifi
+```
+2. 编写服务端文件`sqless_app.py`，用`@sqless.api`把函数变成后端接口。
+```python
+import asyncio
+import sqless
+
+cfg = {
+    'host': '127.0.0.1',
+    'port': 12239,
+    'secret': 'SECRET',
+}
+
+@sqless.api
+def add(a: int, b: int) -> int:
+    """A simple add tool"""
+    return a + b
+
+if __name__=='__main__':
+    asyncio.run(sqless.run_server(__file__))
+```
+3. 启动后端服务
+```bash
+python sqless_app.py
+```
+4. 尝试用后端函数计算1+2
+
+**方式1：HTTP GET（命令行）**
+- 浏览器访问`http://127.0.0.1:12239/api/add 1 2`
+    - 用户名：（不填）
+    - 密码：SECRET
+- curl访问
+```bash
+curl -H "Authorization: Bearer SECRET" \
+    "http://127.0.0.1:12239/api/add%201%202"
 ```
 
-* 会自动创建目录：`www/`、`db/`、`fs/`
-* 访问地址：`http://127.0.0.1:12239/index.html`
+**方式2：HTTP GET（参数）**
+- 浏览器访问`http://127.0.0.1:12239/api/add?a=1&b=2`
+    - 用户名：（不填）
+    - 密码：SECRET
+- curl访问
+```bash
+curl -H "Authorization: Bearer SECRET" \
+    "http://127.0.0.1:12239/api/add?a=1&b=2"
+```
 
-⚠️ 未来版本会移除，当前版本暂时保留兼容。
+**方式3：HTTP POST**
+- curl访问
+```bash
+curl -H "Authorization: Bearer SECRET" \
+     -H "Content-Type: application/json" \
+     -d '{"f":"add","a":1,"b":2}' \
+     http://127.0.0.1:12239/api
+```
 
+**方式4：MCP（让AI智能体调用你的函数）**
+- Claude Code
+```bash
+claude mcp add --transport http sqless http://127.0.0.1:12239/mcp --header "Authorization: Bearer SECRET"
+```
+- 通用MCP配置
+```
+{
+  "mcpServers": {
+    "sqless": {
+      "type": "http",
+      "url": "http://127.0.0.1:12239/mcp",
+      "headers": {
+        "Authorization": "Bearer SECRET"
+      }
+    }
+  }
+}
+```
+
+### 一个命令，从零启动
+运行命令：
+```bash
+sqless
+```
+即可在当前目录下生成`sqless_app.py`模板并启动服务。
+
+### 自带数据库、文件上传、静态网站、跨域访问等功能
+
+**数据库接口**
+
+```bash
+# 写入
+curl -H "Authorization: Bearer SECRET" \
+     -H "Content-Type: application/json" \
+     -d '{"key":"user_1","name":"Alice","age":30}' \
+     http://127.0.0.1:12239/db/users
+
+# 查询
+curl -H "Authorization: Bearer SECRET" \
+     "http://127.0.0.1:12239/db/users/age%20>%2020?page=1&per_page=20"
+
+# 删除
+curl -X DELETE -H "Authorization: Bearer SECRET" \
+     "http://127.0.0.1:12239/db/users/key%20=%20user_1"
+```
+
+**文件接口**
+
+```
+# 上传
+curl -H "Authorization: Bearer SECRET" \
+     -F "file=@local.txt" \
+     http://127.0.0.1:12239/fs/data/local.txt
+
+# 下载
+curl -H "Authorization: Bearer SECRET" \
+     http://127.0.0.1:12239/fs/data/local.txt -o local.txt
+
+# 检查是否存在
+curl -H "Authorization: Bearer SECRET" \
+     http://127.0.0.1:12239/fs/data/local.txt?check
+
+# 列出文件
+curl -H "Authorization: Bearer SECRET" \
+     http://127.0.0.1:12239/fs/data/?check
+```
+
+**静态网站**
+
+`cfg['path_base_www']` 目录下的文件直接托管在根路径：
+```
+GET /             -> www/index.html
+GET /app.js       -> www/app.js
+```
+
+**跨域访问**
+
+sqless服务端允许被跨域访问，也帮助静态网站绕过其他网站的跨域限制：
+
+```javascript
+// HTTP GET
+r = await fetch('http://127.0.0.1:12239/xmlhttpRequest',{
+    "method": "POST",
+    "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer SECRET"
+    },
+    "body":JSON.stringify(
+        {
+          "method": "GET",
+          "url": "https://www.example.com",
+        })
+    }
+)
+console.log(await r.json())
+// HTTP POST (JSON)
+r = await fetch('http://127.0.0.1:12239/xmlhttpRequest',{
+    "method": "POST",
+    "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer SECRET"
+    },
+    "body":JSON.stringify(
+        {
+          "method": "POST",
+          "url": "https://api.example.com/data",
+          "headers": {"Content-Type": "application/json"},
+          "data": {"key": "value"}
+        })
+    }
+)
+console.log(await r.json())
+// HTTP POST (Form)
+r = await fetch('http://127.0.0.1:12239/xmlhttpRequest',{
+    "method": "POST",
+    "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer SECRET"
+    },
+    "data":JSON.stringify(
+        {
+          "method": "POST",
+          "url": "https://api.example.com/upload",
+          "type": "form",
+          "data": {"field1": "value1"},
+          "files": [
+            {
+              "field": "file",
+              "filename": "a.png",
+              "content_type": "image/png",
+              "base64": "<...>"
+            }
+          ]
+        })
+    }
+)
+console.log(await r.json())
+```
+
+**其他特性**
+- API/MCP调用执行中途，如果客户端断开连接，则自动取消任务，减少空转。
+- API/MCP调用失败时，自动把报错信息写到`sqless_exception.log`里，方便排障。
+- GET（命令行）调用方式，在分隔参数时会自动跳过引号、括号。
+    - 例如 `/api/add "hello world" " 123"` ，得到 `hello world 123`
+- GET（命令行）调用方式，会自动解析Python字典、列表。
+    - 例如 `/api/add [{'a': 1}] [0]` ，得到`[{"a":1},0]`
+- 服务端会根据函数注释、参数默认值与类别标识，自动创建MCP工具描述。
+    - 例如前面的add函数，自动生成的MCP工具描述是： `{"name":"add","description":"A simple add tool","inputSchema":{"type":"object","properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}}`
+- 后端服务框架与全文搜索表、向量表一样，只有在使用时才会动态载入模块。

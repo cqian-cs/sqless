@@ -146,7 +146,7 @@ class RDB:
         """
         Query remote DB.
         """
-        url = f"{self.host}/db/{table}/{where}?page={page}&limit={limit}"
+        url = f"{self.host}/db/{table}/{where}?page={page}&per_page={limit}"
 
         for _ in range(5):
             try:
@@ -176,3 +176,52 @@ class RDB:
                 return
             for item in ret.get("data", []):
                 yield item
+
+    def db_delete(self,table:str,where:str) -> dict:
+        """
+        Query remote DB.
+        """
+        url = f"{self.host}/db/{table}/{where}"
+    
+        for _ in range(5):
+            try:
+                r = requests.delete(url, headers=self.headers, timeout=self.timeout)
+                return orjson.loads(r.content)
+            except Exception:
+                time.sleep(1)
+
+    def api_invoke(self,payload) -> dict:
+        """
+        Invoke api
+        """
+        url = f"{self.host}/api"
+        payload = orjson.dumps(payload)
+        try:
+            r = requests.post(
+                url,
+                data=payload,
+                headers={
+                    **self.headers,
+                    "Content-Type": "application/json",
+                },
+                timeout=self.timeout,
+            )
+            ret = orjson.loads(r.content)
+            return ret
+        except Exception as e:
+            print(f"api invoke failed: {e}, {r.content}")
+        return {"suc": False, "data": "Remote server down"}
+
+if __name__=="__main__":
+    import os
+    path_this = os.path.dirname(__file__)
+    rdb = RDB("http://127.0.0.1:27018",'may_the_force_be_with_you')
+    print(rdb.fs_set("test/client.py",f'{path_this}/client.py'))
+    print(rdb.fs_get("test/client.py"))
+    print(rdb.db_set('test-json_data',{'key':'u001','name':'Tom','age':14}))
+    print(rdb.db_set('test-json_data',{'key':'u002','name':'Jerry','age':12}))
+    print(rdb.db_get('test-json_data'))
+    print(rdb.db_get('test-json_data','name like %o%'))
+    print(rdb.db_get('test-json_data','age < 13'))
+    print(rdb.api_invoke({'f':'hello'}))
+    print(rdb.api_invoke({'f':'add','a':1,'b':2}))

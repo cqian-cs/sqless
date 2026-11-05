@@ -2,7 +2,7 @@
 
 [English](README.md) | [中文版](README_zh.md)
 
-A **schema-flexible, zero-abstraction SQLite interface** supporting **Relational tables, JSON tables, Full-Text Search, and Semantic Search**.
+A **schema-flexible, zero-abstraction** SQLite interface supporting **Relational tables, JSON tables, Full-Text Search, and Semantic Search**.
 
 ![:@sqless](https://count.getloli.com/get/@sqless?theme=booru-lewd)
 
@@ -10,10 +10,10 @@ A **schema-flexible, zero-abstraction SQLite interface** supporting **Relational
 
 ## Why sqless is special
 
-* **Schema-free** – automatically adjusts the table schema to fit the input data structure.
+* **Schema-free** – the table schema adjusts automatically to the input data; no need to define tables up front.
 * **High-performance** – executes SQL directly, close to raw SQLite speed, faster than many ORMs.
-* **Multi-file sharding** – store data across multiple SQLite files easily.
-* **SQL-safe** – semantic parsing, parameter binding, and identifier validation prevent SQL injection.
+* **Multi-file sharding** – easily spread data across multiple SQLite files.
+* **SQL-safe** – semantic parsing, parameter binding, and identifier validation block injection at the source.
 * **Multi-table type** – supports Relational, JSON, Full-Text Search (FTS), and Vector tables.
 
 ---
@@ -97,7 +97,7 @@ table['U1'] = {'age': 15}
 print(table['U1']) # {'age': 15}
 ```
 
-* Full replacement: writing field A will overwrite old fields.
+* Full replacement: writing new data overwrites all previous fields.
 
 See [examples/json-table-example.py](examples/3-json-table-example.py) for details.
 
@@ -123,16 +123,18 @@ See [examples/fts-table-example.py](examples/4-fts-table-example.py) for details
 
 **Requirements**:
 
-1. `pip install sqless[vec]`
-2. Set `SILICON_API_KEY` environment variable (uses BAAI/bge-m3 embedding model).
-3. Register for SiliconFlow free API if needed: [https://cloud.siliconflow.cn/i/szt2CkYN](https://cloud.siliconflow.cn/i/szt2CkYN)
+1. Install the extra dependency: `pip install sqless[vec]`
+2. Register on the SiliconFlow platform (invite link: [https://cloud.siliconflow.cn/i/szt2CkYN](https://cloud.siliconflow.cn/i/szt2CkYN))
+3. Set the API key created on SiliconFlow as the environment variable `SILICON_API_KEY` (uses the free BAAI/bge-m3 embedding model)
 
 **Usage**:
 ```python
 table = db['vec_docs']
 
 table.upsert({
-    "A": "Deep learning is part of machine learning"
+    "A": "Deep learning is a branch of machine learning",
+    "B": "NLP stands for Natural Language Processing.",
+    "C": "SQLite is a lightweight database",
 })
 
 results = table.search("large language model", k=2)
@@ -151,12 +153,12 @@ table = dbs["app-Asia-users"]
 table.upsert({...})
 ```
 
-Mapping rule:
+Mapping rule example:
 
 ```
 app-Asia-users
 ↓
-app-Asia.sqlite / users
+table `users` in db_folder/app-Asia.sqlite
 ```
 
 See [examples/multi-files-sqless.py](examples/2-multi-files-sqless.py) for details.
@@ -166,16 +168,16 @@ See [examples/multi-files-sqless.py](examples/2-multi-files-sqless.py) for detai
 ## 🗂 DB Operations
 
 ```python
-dir(db)
-db.list_tables()
-del db['users']
-db.close()
+db = sqless.DB("your.db") # create the database file
+table = db["users"]       # create / get a table
+dir(db)                   # list all table names in the database
+del db['users']           # drop a table
+db.close()                # close the connection
 ```
 
 See [examples/hello-sqless.py](examples/1-hello-sqless.py) for details.
 
 ---
-
 
 ## Safe WHERE Expressions
 
@@ -210,32 +212,227 @@ print(params) # [10, 12, 14, 'Tom%']
 ## 🧭 Use Cases
 
 * Local database tools
-* Data analysis
-* Lightweight services
+* Data analysis scripts
+* Lightweight backend services
 * AI applications (RAG / semantic search)
 
 ---
 
-## 🔄 Migration / Changes
+## 🔹 Developing a Backend Service with sqless
 
-**New in this version**:
+sqless ships a simple, practical backend service framework.
 
-* `vec_` table (semantic search)
-* `fts_` table (full-text search)
-* `json_` table (high-flexible schema)
+### Functions as a Service, Four Access Methods
 
-Default table type remains Relational (low-flexible schema).
-
----
-
-## 🔹 Legacy Server (Deprecated)
-
+1. Install dependencies
 ```bash
-sqless --host 127.0.0.1 --port 12239 --secret xxx
+pip install aiohttp aiofiles certifi
 ```
 
-* Auto creates directories: `www/`, `db/`, `fs/`
-* Access via: `http://127.0.0.1:12239/index.html`
+2. Write a server file `sqless_app.py`, turning functions into backend endpoints with `@sqless.api`.
+```python
+import asyncio
+import sqless
 
-⚠️ Will be removed in future versions. Current version still compatible.
+cfg = {
+    'host': '127.0.0.1',
+    'port': 12239,
+    'secret': 'SECRET',
+}
 
+@sqless.api
+def add(a: int, b: int) -> int:
+    """A simple add tool"""
+    return a + b
+
+if __name__=='__main__':
+    asyncio.run(sqless.run_server(__file__))
+```
+
+3. Start the backend service
+```bash
+python sqless_app.py
+```
+
+4. Try computing 1+2 with the backend function
+
+**Method 1: HTTP GET (command line)**
+- Open `http://127.0.0.1:12239/api/add 1 2` in a browser
+    - Username: (leave empty)
+    - Password: SECRET
+- With curl
+```bash
+curl -H "Authorization: Bearer SECRET" \
+    "http://127.0.0.1:12239/api/add%201%202"
+```
+
+**Method 2: HTTP GET (query params)**
+- Open `http://127.0.0.1:12239/api/add?a=1&b=2` in a browser
+    - Username: (leave empty)
+    - Password: SECRET
+- With curl
+```bash
+curl -H "Authorization: Bearer SECRET" \
+    "http://127.0.0.1:12239/api/add?a=1&b=2"
+```
+
+**Method 3: HTTP POST**
+- With curl
+```bash
+curl -H "Authorization: Bearer SECRET" \
+     -H "Content-Type: application/json" \
+     -d '{"f":"add","a":1,"b":2}' \
+     http://127.0.0.1:12239/api
+```
+
+**Method 4: MCP (let AI agents call your functions)**
+- Claude Code
+```bash
+claude mcp add --transport http sqless http://127.0.0.1:12239/mcp --header "Authorization: Bearer SECRET"
+```
+- Generic MCP config
+```
+{
+  "mcpServers": {
+    "sqless": {
+      "type": "http",
+      "url": "http://127.0.0.1:12239/mcp",
+      "headers": {
+        "Authorization": "Bearer SECRET"
+      }
+    }
+  }
+}
+```
+
+### One Command, Start from Scratch
+
+Run:
+```bash
+sqless
+```
+This generates a `sqless_app.py` template in the current directory and starts the service.
+
+### Built-in Database, File Upload, Static Site, CORS
+
+**Database API**
+
+```bash
+# Write
+curl -H "Authorization: Bearer SECRET" \
+     -H "Content-Type: application/json" \
+     -d '{"key":"user_1","name":"Alice","age":30}' \
+     http://127.0.0.1:12239/db/users
+
+# Query
+curl -H "Authorization: Bearer SECRET" \
+     "http://127.0.0.1:12239/db/users/age%20>%2020?page=1&per_page=20"
+
+# Delete
+curl -X DELETE -H "Authorization: Bearer SECRET" \
+     "http://127.0.0.1:12239/db/users/key%20=%20user_1"
+```
+
+**File API**
+
+```
+# Upload
+curl -H "Authorization: Bearer SECRET" \
+     -F "file=@local.txt" \
+     http://127.0.0.1:12239/fs/data/local.txt
+
+# Download
+curl -H "Authorization: Bearer SECRET" \
+     http://127.0.0.1:12239/fs/data/local.txt -o local.txt
+
+# Check existence
+curl -H "Authorization: Bearer SECRET" \
+     http://127.0.0.1:12239/fs/data/local.txt?check
+
+# List files
+curl -H "Authorization: Bearer SECRET" \
+     http://127.0.0.1:12239/fs/data/?check
+```
+
+**Static Site**
+
+Files under the `cfg['path_base_www']` directory are served directly at the root path:
+```
+GET /             -> www/index.html
+GET /app.js       -> www/app.js
+```
+
+**CORS**
+
+The sqless server allows cross-origin access, and also helps static sites bypass other sites' CORS restrictions:
+
+```javascript
+// HTTP GET
+r = await fetch('http://127.0.0.1:12239/xmlhttpRequest',{
+    "method": "POST",
+    "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer SECRET"
+    },
+    "body":JSON.stringify(
+        {
+          "method": "GET",
+          "url": "https://www.example.com",
+        })
+    }
+)
+console.log(await r.json())
+// HTTP POST (JSON)
+r = await fetch('http://127.0.0.1:12239/xmlhttpRequest',{
+    "method": "POST",
+    "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer SECRET"
+    },
+    "body":JSON.stringify(
+        {
+          "method": "POST",
+          "url": "https://api.example.com/data",
+          "headers": {"Content-Type": "application/json"},
+          "data": {"key": "value"}
+        })
+    }
+)
+console.log(await r.json())
+// HTTP POST (Form)
+r = await fetch('http://127.0.0.1:12239/xmlhttpRequest',{
+    "method": "POST",
+    "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer SECRET"
+    },
+    "data":JSON.stringify(
+        {
+          "method": "POST",
+          "url": "https://api.example.com/upload",
+          "type": "form",
+          "data": {"field1": "value1"},
+          "files": [
+            {
+              "field": "file",
+              "filename": "a.png",
+              "content_type": "image/png",
+              "base64": "<...>"
+            }
+          ]
+        })
+    }
+)
+console.log(await r.json())
+```
+
+**Other Features**
+- If the client disconnects mid-execution of an API/MCP call, the task is cancelled automatically to avoid wasted work.
+- On an API/MCP call failure, the error is written to `sqless_exception.log` for easier debugging.
+- The GET (command-line) style automatically skips quotes and brackets when splitting arguments.
+    - For example, `/api/add "hello world" " 123"` yields `hello world 123`
+- The GET (command-line) style automatically parses Python dicts and lists.
+    - For example, `/api/add [{'a': 1}] [0]` yields `[{"a":1},0]`
+- The server auto-generates MCP tool descriptions from function docstrings, parameter defaults, and type annotations.
+    - For example, the `add` function above produces: `{"name":"add","description":"A simple add tool","inputSchema":{"type":"object","properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}}`
+- Like the FTS and vector tables, the backend service framework loads its modules dynamically only when used.
