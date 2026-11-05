@@ -34,5 +34,13 @@ Source = "https://github.com/cqian-cs/sqless"
 [tool.hatch.version]
 path = "src/sqless/__init__.py"
 
+# hatchling >= 1.30 defaults to Core Metadata 2.5, which twine/PyPI still reject.
+# Emit 2.4 until the index accepts 2.5.
+[tool.hatch.build.targets.wheel]
+core-metadata-version = "2.4"
+
+[tool.hatch.build.targets.sdist]
+core-metadata-version = "2.4"
+
 [project.scripts]
 sqless = "sqless.server:main"
