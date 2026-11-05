@@ -122,6 +122,8 @@ async def run_server(
         with open(path_app,'w',encoding='utf-8') as fo:
             with open(f"{path_src}/sqless_app_example.py",'r',encoding='utf-8') as fi:
                 fo.write(fi.read())
+    if dry_run:
+        exit()
     import importlib, sys
     sys.path.append(path_this)
     app_name = os.path.splitext(os.path.split(path_app)[1])[0]
