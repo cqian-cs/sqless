@@ -1,4 +1,4 @@
-# pip install aiohttp aiofiles certifi
+# pip install aiohttp aiofiles
 import os
 import asyncio
 import sqless
@@ -76,6 +76,8 @@ MCP usage:
     }
   }
 }
+Claude Code usage:
+    claude mcp add --transport http <mcp_name> http://127.0.0.1:12239/mcp --header "Authorization: Bearer <secret>"
 
 API usage:
     GET example:
@@ -92,8 +94,38 @@ Browser usage:
         username: (empty)
         password: <secret>
 
-Claude Code usage:
-    claude mcp add --transport http <mcp_name> http://127.0.0.1:12239/mcp --header "Authorization: Bearer <secret>"
+Database API:
+    Write:
+        curl -H "Authorization: Bearer <secret>" \
+             -H "Content-Type: application/json" \
+             -d '{"key":"user_1","name":"Alice","age":30}' \
+             http://127.0.0.1:12239/db/users
+    Query:
+        curl -H "Authorization: Bearer <secret>" \
+             "http://127.0.0.1:12239/db/users/age%20>%2020?page=1&per_page=20"
+    Delete:
+        curl -X DELETE -H "Authorization: Bearer <secret>" \
+             "http://127.0.0.1:12239/db/users/key%20=%20user_1"
+
+File API:
+    Upload:
+        curl -H "Authorization: Bearer <secret>" -F "file=@local.txt" \
+             http://127.0.0.1:12239/fs/data/local.txt
+    Download:
+        curl -H "Authorization: Bearer <secret>" \
+             http://127.0.0.1:12239/fs/data/local.txt -o local.txt
+    Check existence:
+        curl -H "Authorization: Bearer <secret>" \
+             http://127.0.0.1:12239/fs/data/local.txt?check
+    List files:
+        curl -H "Authorization: Bearer <secret>" \
+             http://127.0.0.1:12239/fs/data/?check
+
+Static site:
+    Files under cfg['path_base_www'] are served at the root path:
+        GET /          -> www/index.html
+        GET /app.js    -> www/app.js
+
 """
 
 if __name__=='__main__':

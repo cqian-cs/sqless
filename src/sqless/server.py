@@ -99,6 +99,7 @@ def split(s, sep=',', L="{[(\"'", R="}])\"'"):
 async def run_server(
     path_app = 'sqless_app.py',
     reset = False,
+    dry_run = False,
 ):
     import re
     import base64
@@ -285,48 +286,6 @@ async def run_server(
             return web.FileResponse(f"{path_base_www}/{file}")
         return web.Response(status=404, text="404 Not Found")
 
-    try:
-        import certifi
-        import ssl
-        ssl_ctx = ssl.create_default_context(cafile=certifi.where())
-    except:
-        ssl_ctx = True
-    async def handle_xmlhttpRequest(request):
-        try:
-            data = await request.json()
-            method = data.get("method", "POST").upper()
-            url = data.get("url")
-            if not url:
-                return web.Response(body=orjson.dumps({"suc": False, "text": "no url"}), content_type='application/json')
-            headers = data.get("headers", {})
-            payload = None
-            if data.get('type') == 'form':
-                payload = FormData()
-                for k, v in data.get("data", {}).items():
-                    payload.add_field(k, v)
-                for f in data.get("files", []):
-                    content = base64.b64decode(f["base64"])
-                    payload.add_field(
-                        name=f["field"],
-                        value=content,
-                        filename=f["filename"],
-                        content_type=f["content_type"]
-                    )
-            else:
-                payload = data.get('data')
-            timeout = ClientTimeout(total=15)
-            connector = TCPConnector(ssl=ssl_ctx)
-            async with ClientSession(timeout=timeout,connector=connector) as session:
-                async with session.request(method, url, headers=headers, data=payload, allow_redirects=True) as resp:
-                    text = await resp.text()
-                    return web.Response(body=orjson.dumps({
-                        "suc": True,
-                        "status": resp.status,
-                        "text": text,
-                        "url": str(resp.url)
-                    }), content_type='application/json')
-        except Exception as e:
-            return web.Response(body=orjson.dumps({"suc": False, "text": str(e)}), content_type='application/json')
     async def handle_mcp_request(request: web.Request) -> web.Response:
         response = web.StreamResponse()
         response.content_type = 'text/event-stream'
@@ -448,7 +407,6 @@ async def run_server(
     web_app.router.add_delete('/db/{db_table}/{where:.*}', handle_delete_db)
     web_app.router.add_get('/fs/{path_file:.*}', handle_get_fs)
     web_app.router.add_post('/fs/{path_file:.*}', handle_post_fs)
-    web_app.router.add_post('/xmlhttpRequest', handle_xmlhttpRequest)
     web_app.router.add_get('/api/{func_args:.*}',handle_get_api)
     web_app.router.add_post('/api',handle_post_api)
     web_app.router.add_post('/mcp',handle_mcp_request)
@@ -492,6 +450,7 @@ def main():
     asyncio.run(run_server(
         path_app=args.app,
         reset=args.reset,
+        dry_run=True
     ))
 if __name__ == "__main__":
     main()

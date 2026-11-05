@@ -1,43 +1,43 @@
 # sqless
 
-[English](README.md) | [中文版](README_zh.md)
+[English](README_en.md) | [中文版](README.md)
 
-A **schema-flexible, zero-abstraction** SQLite interface supporting **Relational tables, JSON tables, Full-Text Search, and Semantic Search**.
+一个 **schema 灵活、零抽象** 的 SQLite 接口，支持 **关系表、JSON表、全文搜索和语义搜索**。
 
 ![:@sqless](https://count.getloli.com/get/@sqless?theme=booru-lewd)
 
 ---
 
-## Why sqless is special
+## sqless好在哪
 
-* **Schema-free** – the table schema adjusts automatically to the input data; no need to define tables up front.
-* **High-performance** – executes SQL directly, close to raw SQLite speed, faster than many ORMs.
-* **Multi-file sharding** – easily spread data across multiple SQLite files.
-* **SQL-safe** – semantic parsing, parameter binding, and identifier validation block injection at the source.
-* **Multi-table type** – supports Relational, JSON, Full-Text Search (FTS), and Vector tables.
+* **无schema约束** – 表结构会根据你写入的数据自动调整，不用提前建表。
+* **高性能** – 直接执行 SQL，性能接近原生 SQLite，比很多 ORM 都要快。
+* **多文件分片** – 可以轻松把数据分散到多个 SQLite 文件中。
+* **防SQL注入** – 通过语义解析、参数绑定和标识符校验，从源头避免注入风险。
+* **多种表类型** – 支持关系表、JSON 表、全文搜索表（FTS）和向量表。
 
 ---
 
-## ⚡ Performance Test
+## ⚡ 性能对比
 
-* **Unit:** Seconds (lower is better).
-* **Percentages** indicate the performance difference compared to other libraries.
-    * `↑`: How much faster `sqless` is than the library (i.e., how much slower the library is).
-    * `↓`: How much slower `sqless` is than raw SQLite (i.e., the overhead of `sqless`).
+* 单位：秒，数值越小越好。
+* 百分比：表示相较于对比库的性能提升幅度。
+    * `↑` 表示 sqless 比该库快多少（即该库比 sqless 慢多少）
+    * `↓` 表示 sqless 比原生sqlite慢多少（即 sqless 的额外开销）
 
-| Name       | Init         | Write         | Update       | Read          | Category      |
+| 名称       | 初始化       | 写入         | 更新       | 读取          | 类型          |
 | ---------- | ------------ | ------------- | ------------ | ------------- |---------------|
-| sqlalchemy | 0.022 (↑12%) | 5.572 (↑94%)  | 3.218 (↑99%) | 58.345 (↑97%) | Static schema |
-| dataset    | 0.030 (↑33%) | 10.337 (↑97%) | 1.290 (↑98%) | 46.209 (↑96%) | Flex schema   |
-| pony       | 0.030 (↑34%) | 2.221 (↑84%)  | 0.679 (↑96%) | 10.283 (↑84%) | Static schema |
-| **sqless** | **0.020**    | **0.359**     | **0.030**    | **1.676**     | **Flex schema** |
-| raw sqlite | 0.013 (↓51%) | 0.260 (↓38%)  | 0.023 (↓32%) | 1.406 (↓19%)  | Static schema |
+| sqlalchemy | 0.022 (↑12%) | 5.572 (↑94%)  | 3.218 (↑99%) | 58.345 (↑97%) | 固定 schema |
+| dataset    | 0.030 (↑33%) | 10.337 (↑97%) | 1.290 (↑98%) | 46.209 (↑96%) | 灵活 schema   |
+| pony       | 0.030 (↑34%) | 2.221 (↑84%)  | 0.679 (↑96%) | 10.283 (↑84%) | 固定 schema |
+| **sqless** | **0.020**    | **0.359**     | **0.030**    | **1.676**     | **灵活 schema** |
+| 原生 sqlite | 0.013 (↓51%) | 0.260 (↓38%)  | 0.023 (↓32%) | 1.406 (↓19%)  | 固定 schema |
 
-See [benchmark/cmp_with_other_orms.py](benchmark/cmp_with_other_orms.py) for details.
+详细测试代码见 [benchmark/cmp_with_other_orms.py](benchmark/cmp_with_other_orms.py)。
 
 ---
 
-## 🚀 Quick Start
+## 🚀 快速上手
 
 ```python
 import sqless
@@ -53,27 +53,27 @@ table.upsert({
 for item in table.iter('age < 15'):
     print(item)
 
-table['U1']['age'] = 15   # ❌ does NOT update database
-table['U1'] = {'age':15}  # ✅ updates database
+table['U1']['age'] = 15   # ❌ 这样写不会更新数据库
+table['U1'] = {'age':15}  # ✅ 这样才会更新数据库
 print(table['U1']) # {'key': 'U1', 'name': 'Tom', 'age': 15}
 ```
 
 ---
 
-## 🧠 Table Types
+## 🧠 表类型说明
 
-Table type is determined by prefix:
+表类型由表名前缀决定：
 
-| Type       | Prefix  | Features                          |
+| 类型       | 前缀    | 特点                          |
 | ---------- | ------- | --------------------------------- |
-| Relational | none    | low-flexible schema, partial updates   |
-| JSON       | `json_` | high-flexible schema, full replacement |
-| FTS        | `fts_`  | full-text search                  |
-| Vector     | `vec_`  | semantic search                   |
+| 关系表 | 无      | schema 相对固定，支持部分更新   |
+| JSON 表    | `json_` | schema 极其灵活，每次都是整体替换 |
+| FTS 表        | `fts_`  | 全文搜索                  |
+| 向量表     | `vec_`  | 语义搜索                   |
 
 ---
 
-### 🔹 Relational Table
+### 🔹 关系表
 
 ```python
 table = db['users']
@@ -82,13 +82,13 @@ table['U1'] = {'age': 15}
 print(table['U1']) # {'key': 'U1', 'name': 'Tom', 'age': 15}
 ```
 
-* Partial updates: updating one field does not affect others.
+* 部分更新：只改某个字段，其他字段保留。
 
-See [examples/hello-sqless.py](examples/1-hello-sqless.py) for details.
+详见 [examples/hello-sqless.py](examples/1-hello-sqless.py)。
 
 ---
 
-### 🔹 JSON Table
+### 🔹 JSON 表
 
 ```python
 table = db['json_users']
@@ -97,54 +97,55 @@ table['U1'] = {'age': 15}
 print(table['U1']) # {'age': 15}
 ```
 
-* Full replacement: writing new data overwrites all previous fields.
+* 整体替换：写入新数据时，旧数据全部被覆盖。
 
-See [examples/json-table-example.py](examples/3-json-table-example.py) for details.
+详见 [examples/json-table-example.py](examples/3-json-table-example.py)。
 
 ---
 
-### 🔹 FTS Table (Full-Text Search)
+### 🔹 FTS 表（全文搜索）
 
 ```python
 table = db['fts_docs']
 
 table.upsert({
-    "A": "SQLite supports full text search"
+    "A": "SQLite 支持全文搜索"
 })
 
 results = table.search('"SQLite"')
 ```
 
-See [examples/fts-table-example.py](examples/4-fts-table-example.py) for details.
+详见 [examples/fts-table-example.py](examples/4-fts-table-example.py)。
 
 ---
 
-### 🔹 Vector Table (Semantic Search)
+### 🔹 向量表（语义搜索）
 
-**Requirements**:
+**准备工作**：
 
-1. Install the extra dependency: `pip install sqless[vec]`
-2. Register on the SiliconFlow platform (invite link: [https://cloud.siliconflow.cn/i/szt2CkYN](https://cloud.siliconflow.cn/i/szt2CkYN))
-3. Set the API key created on SiliconFlow as the environment variable `SILICON_API_KEY` (uses the free BAAI/bge-m3 embedding model)
+1. 安装扩展依赖：`pip install sqless[vec]`
+2. 注册硅基流动平台（邀请链接：[https://cloud.siliconflow.cn/i/szt2CkYN](https://cloud.siliconflow.cn/i/szt2CkYN)）
+3. 将硅基流动平台创建的API密钥，设置环境变量 `SILICON_API_KEY` （使用免费的 BAAI/bge-m3 向量模型）
 
-**Usage**:
+
+**用法**：
 ```python
 table = db['vec_docs']
 
 table.upsert({
-    "A": "Deep learning is a branch of machine learning",
+    "A": "深度学习是机器学习的一个分支",
     "B": "NLP stands for Natural Language Processing.",
-    "C": "SQLite is a lightweight database",
+    "C": "SQLite是轻量级的数据库",
 })
 
-results = table.search("large language model", k=2)
+results = table.search("大语言模型", k=2)
 ```
 
-See [examples/vec-table-example.py](examples/5-vec-table-example.py) for details.
+详见 [examples/vec-table-example.py](examples/5-vec-table-example.py)。
 
 ---
 
-## 📁 Multi-file DB
+## 📁 多文件数据库
 
 ```python
 dbs = sqless.DBS(folder="db_folder")
@@ -153,286 +154,125 @@ table = dbs["app-Asia-users"]
 table.upsert({...})
 ```
 
-Mapping rule example:
+映射规则示例：
 
 ```
 app-Asia-users
 ↓
-table `users` in db_folder/app-Asia.sqlite
+db_folder/app-Asia.sqlite 数据库中的 users 表
 ```
 
-See [examples/multi-files-sqless.py](examples/2-multi-files-sqless.py) for details.
+详见 [examples/multi-files-sqless.py](examples/2-multi-files-sqless.py)。
 
 ---
 
-## 🗂 DB Operations
+## 🗂 数据库常用操作
 
 ```python
-db = sqless.DB("your.db") # create the database file
-table = db["users"]       # create / get a table
-dir(db)                   # list all table names in the database
-del db['users']           # drop a table
-db.close()                # close the connection
+db = sqless.DB("your.db") # 创建数据库文件
+table = db["users"]       # 创建/获取表
+dir(db)                   # 列出数据库中所有的表名
+del db['users']           # 删除表
+db.close()                # 关闭连接
 ```
 
-See [examples/hello-sqless.py](examples/1-hello-sqless.py) for details.
+详见 [examples/hello-sqless.py](examples/1-hello-sqless.py)。
 
 ---
 
-## Safe WHERE Expressions
+## 安全的 WHERE 语句
 
-`sqless` supports **safe, parameterized WHERE parsing**:
+`sqless` 支持**安全、参数化**的 WHERE 解析：
 
-* Logical operators: `AND`, `OR`, `NOT`
-* Comparison operators: `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `like`, `ilike`, `is`, `in`
-* Parentheses: `(` and `)`
-* Sorting: `ORDER BY <column> [ASC|DESC]`
-* SQL injection safe: forbidden characters `; -- /* */` blocked
-* Values automatically bound with `?` placeholders
+* 逻辑运算符：`AND`, `OR`, `NOT`
+* 比较运算符：`=`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `like`, `ilike`, `is`, `in`
+* 括号：`(` 和 `)`
+* 排序：`ORDER BY <列名> [ASC|DESC]`
+* 防注入：禁止输入 `; -- /* */` 等危险字符
+* 值会自动用 `?` 占位符绑定，避免拼接 SQL
 
-### Example
+### 示例
 
 ```python
-# Filter age in [10,12,14] or name like 'Tom%', order by age ascending
+# 筛选 age 在 [10,12,14] 中，或者 name 以 'Tom' 开头，结果按 age 升序排列
 where_str = "age in [10,12,14] OR name like 'Tom%' order by age asc"
 success, sql, params = parse_where(where_str)
 print(sql)    # where age in (?,?,?) or name like ? order by age asc
 print(params) # [10, 12, 14, 'Tom%']
 ```
 
-**Notes**:
+**注意**：
 
-* `in` requires a list value: `[10,12,14]`
-* `is null` works, e.g., `age is null`
-* Column names must be valid identifiers (letters, digits, underscores, Chinese characters; cannot start with a digit)
-* Complex SQL functions or subqueries are **not supported**
-
----
-
-## 🧭 Use Cases
-
-* Local database tools
-* Data analysis scripts
-* Lightweight backend services
-* AI applications (RAG / semantic search)
+* `in` 后面必须跟列表，例如 `[10,12,14]`
+* `is null` 写法可用，例如 `age is null`
+* 列名必须是合法的标识符（字母、数字、下划线、中文，且不能以数字开头）
+* 不支持复杂的 SQL 函数或子查询
 
 ---
 
-## 🔹 Developing a Backend Service with sqless
+## 🧭 适合做什么
 
-sqless ships a simple, practical backend service framework.
+* 本地数据库小工具
+* 数据分析脚本
+* 轻量级后端服务
+* AI 应用（RAG / 语义搜索）
 
-### Functions as a Service, Four Access Methods
+---
 
-1. Install dependencies
-```bash
-pip install aiohttp aiofiles certifi
-```
+## 🔹 使用sqless开发后端服务
 
-2. Write a server file `sqless_app.py`, turning functions into backend endpoints with `@sqless.api`.
+sqless 自带一个轻量实用的后端框架：用 `@sqless.api` 装饰函数，它就同时变成一个 HTTP 接口和一个 MCP 工具。
+
+#### 一个函数，就是一个 HTTP 接口 + 一个 MCP 工具
+创建`sqless_app.py`:
 ```python
 import asyncio
 import sqless
 
-cfg = {
-    'host': '127.0.0.1',
-    'port': 12239,
-    'secret': 'SECRET',
-}
+cfg = {'host': '127.0.0.1', 'port': 12239, 'secret': 'SECRET'}
 
 @sqless.api
 def add(a: int, b: int) -> int:
     """A simple add tool"""
     return a + b
 
-if __name__=='__main__':
+if __name__ == '__main__':
     asyncio.run(sqless.run_server(__file__))
 ```
-
-3. Start the backend service
+启动服务：
 ```bash
-python sqless_app.py
+pip install aiohttp aiofiles
+python3 sqless_app.py
 ```
+#### 远程函数调用的四种方式
 
-4. Try computing 1+2 with the backend function
-
-**Method 1: HTTP GET (command line)**
-- Open `http://127.0.0.1:12239/api/add 1 2` in a browser
-    - Username: (leave empty)
-    - Password: SECRET
-- With curl
 ```bash
-curl -H "Authorization: Bearer SECRET" \
-    "http://127.0.0.1:12239/api/add%201%202"
-```
+# 1. GET，命令行风格
+curl -H "Authorization: Bearer SECRET" "http://127.0.0.1:12239/api/add%201%202"
 
-**Method 2: HTTP GET (query params)**
-- Open `http://127.0.0.1:12239/api/add?a=1&b=2` in a browser
-    - Username: (leave empty)
-    - Password: SECRET
-- With curl
-```bash
-curl -H "Authorization: Bearer SECRET" \
-    "http://127.0.0.1:12239/api/add?a=1&b=2"
-```
+# 2. GET，查询参数
+curl -H "Authorization: Bearer SECRET" "http://127.0.0.1:12239/api/add?a=1&b=2"
 
-**Method 3: HTTP POST**
-- With curl
-```bash
-curl -H "Authorization: Bearer SECRET" \
-     -H "Content-Type: application/json" \
-     -d '{"f":"add","a":1,"b":2}' \
-     http://127.0.0.1:12239/api
-```
+# 3. POST，JSON
+curl -H "Authorization: Bearer SECRET" -H "Content-Type: application/json" \
+     -d '{"f":"add","a":1,"b":2}' http://127.0.0.1:12239/api
 
-**Method 4: MCP (let AI agents call your functions)**
-- Claude Code
-```bash
+# 4. MCP（Claude Code）
 claude mcp add --transport http sqless http://127.0.0.1:12239/mcp --header "Authorization: Bearer SECRET"
 ```
-- Generic MCP config
-```
-{
-  "mcpServers": {
-    "sqless": {
-      "type": "http",
-      "url": "http://127.0.0.1:12239/mcp",
-      "headers": {
-        "Authorization": "Bearer SECRET"
-      }
-    }
-  }
-}
-```
 
-### One Command, Start from Scratch
+前两种 GET 也可以直接粘进浏览器地址栏，密码填 `SECRET`，用户名留空：
 
-Run:
+- 命令行风格：`http://127.0.0.1:12239/api/add 1 2`
+- 查询参数：`http://127.0.0.1:12239/api/add?a=1&b=2`
+
+### 从一条命令开始
+
 ```bash
 sqless
 ```
-This generates a `sqless_app.py` template in the current directory and starts the service.
+该命令会在当前目录生成 [sqless_app.py](src/sqless/sqless_app_example.py)。
 
-### Built-in Database, File Upload, Static Site, CORS
+内含配置项（`cfg`）、初始化与退出钩子（`on_init` / `on_exit`）、多数据库对象（`dbs`）、四个示例函数（`hello`、`add`、`get_time`、`sleep`）、用法说明（MCP配置、API调用方式、`/db`数据库接口、`/fs`文件上传下载、`www/`静态网站）。
 
-**Database API**
 
-```bash
-# Write
-curl -H "Authorization: Bearer SECRET" \
-     -H "Content-Type: application/json" \
-     -d '{"key":"user_1","name":"Alice","age":30}' \
-     http://127.0.0.1:12239/db/users
-
-# Query
-curl -H "Authorization: Bearer SECRET" \
-     "http://127.0.0.1:12239/db/users/age%20>%2020?page=1&per_page=20"
-
-# Delete
-curl -X DELETE -H "Authorization: Bearer SECRET" \
-     "http://127.0.0.1:12239/db/users/key%20=%20user_1"
-```
-
-**File API**
-
-```
-# Upload
-curl -H "Authorization: Bearer SECRET" \
-     -F "file=@local.txt" \
-     http://127.0.0.1:12239/fs/data/local.txt
-
-# Download
-curl -H "Authorization: Bearer SECRET" \
-     http://127.0.0.1:12239/fs/data/local.txt -o local.txt
-
-# Check existence
-curl -H "Authorization: Bearer SECRET" \
-     http://127.0.0.1:12239/fs/data/local.txt?check
-
-# List files
-curl -H "Authorization: Bearer SECRET" \
-     http://127.0.0.1:12239/fs/data/?check
-```
-
-**Static Site**
-
-Files under the `cfg['path_base_www']` directory are served directly at the root path:
-```
-GET /             -> www/index.html
-GET /app.js       -> www/app.js
-```
-
-**CORS**
-
-The sqless server allows cross-origin access, and also helps static sites bypass other sites' CORS restrictions:
-
-```javascript
-// HTTP GET
-r = await fetch('http://127.0.0.1:12239/xmlhttpRequest',{
-    "method": "POST",
-    "headers": {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer SECRET"
-    },
-    "body":JSON.stringify(
-        {
-          "method": "GET",
-          "url": "https://www.example.com",
-        })
-    }
-)
-console.log(await r.json())
-// HTTP POST (JSON)
-r = await fetch('http://127.0.0.1:12239/xmlhttpRequest',{
-    "method": "POST",
-    "headers": {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer SECRET"
-    },
-    "body":JSON.stringify(
-        {
-          "method": "POST",
-          "url": "https://api.example.com/data",
-          "headers": {"Content-Type": "application/json"},
-          "data": {"key": "value"}
-        })
-    }
-)
-console.log(await r.json())
-// HTTP POST (Form)
-r = await fetch('http://127.0.0.1:12239/xmlhttpRequest',{
-    "method": "POST",
-    "headers": {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer SECRET"
-    },
-    "data":JSON.stringify(
-        {
-          "method": "POST",
-          "url": "https://api.example.com/upload",
-          "type": "form",
-          "data": {"field1": "value1"},
-          "files": [
-            {
-              "field": "file",
-              "filename": "a.png",
-              "content_type": "image/png",
-              "base64": "<...>"
-            }
-          ]
-        })
-    }
-)
-console.log(await r.json())
-```
-
-**Other Features**
-- If the client disconnects mid-execution of an API/MCP call, the task is cancelled automatically to avoid wasted work.
-- On an API/MCP call failure, the error is written to `sqless_exception.log` for easier debugging.
-- The GET (command-line) style automatically skips quotes and brackets when splitting arguments.
-    - For example, `/api/add "hello world" " 123"` yields `hello world 123`
-- The GET (command-line) style automatically parses Python dicts and lists.
-    - For example, `/api/add [{'a': 1}] [0]` yields `[{"a":1},0]`
-- The server auto-generates MCP tool descriptions from function docstrings, parameter defaults, and type annotations.
-    - For example, the `add` function above produces: `{"name":"add","description":"A simple add tool","inputSchema":{"type":"object","properties":{"a":{"type":"integer"},"b":{"type":"integer"}},"required":["a","b"]}}`
-- Like the FTS and vector tables, the backend service framework loads its modules dynamically only when used.
