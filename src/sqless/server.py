@@ -427,7 +427,8 @@ async def run_server(
     print(f"Serving at {os.path.abspath(path_this)}")
     print(f"Loaded {len(tools)} tools")
     for i,tool in enumerate(tools):
-        print(f"  {i+1} {tool['name']} {tool['description'].split('\n')[0]}")
+        tool_desc = tool['description'].split('\n')[0]
+        print(f"  {i+1} {tool['name']} {tool_desc}")
     stop_event = asyncio.Event()
     try:
         while not stop_event.is_set():
