@@ -415,10 +415,11 @@ async def run_server(
     web_app.router.add_get('/mcp_tools',lambda r:web.Response(body=orjson.dumps(tools), content_type='application/json'))
     web_app.router.add_get('/{file:.*}', handle_static)
     if hasattr(app,'on_init'):
+        init_args = [web_app][:len(inspect.signature(app.on_init).parameters)]
         if inspect.iscoroutinefunction(app.on_init):
-            await app.on_init()
+            await app.on_init(*init_args)
         else:
-            app.on_init()
+            app.on_init(*init_args)
     runner = web.AppRunner(web_app)
     await runner.setup()
     site = web.TCPSite(runner, host, port)

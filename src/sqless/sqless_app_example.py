@@ -17,7 +17,7 @@ cfg = {
         '/api/hello' # allow GET /api/hello without secret
     ]
 }
-async def on_init():
+async def on_init(app):
     print("Enter on_init")
 
 async def on_exit():
