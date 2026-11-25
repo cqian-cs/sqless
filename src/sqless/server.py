@@ -10,7 +10,13 @@ def api(func):
         properties = {}
         required_params = []
         params = []
+        use_request = False
         for name, param in inspect.signature(func).parameters.items():
+            if name == 'request':
+                use_request = True
+                continue
+            if name.startswith('_'):
+                continue
             params.append(name)
             param_schema = {}
             py_type = param.annotation
@@ -53,7 +59,7 @@ def api(func):
             "inputSchema": input_schema
         }
         tools.append(mcp_definition)
-        func_table[func.__name__]={'f':func,'async':inspect.iscoroutinefunction(func),'params':params}
+        func_table[func.__name__]={'f':func,'async':inspect.iscoroutinefunction(func),'params':params,'use_request':use_request}
     def wrapper(*args,**kwargs):
         return func(*args,**kwargs)
     wrapper.__name__ = func.__name__
@@ -137,12 +143,14 @@ async def run_server(
     path_base_www= cfg.get('path_base_www',f"{path_this}/www")
     max_filesize= cfg.get('max_filesize',200)
     open_get_prefix= tuple(cfg.get('open_get_prefix',[]))
+    open_post_prefix= tuple(cfg.get('open_post_prefix',[]))
     # Server middlewware
     dbs = app.dbs if hasattr(app,'dbs') else DBS(path_base_db)
     print(f"path_base_db: {path_base_db}")
     print(f"path_base_fs: {path_base_fs}")
     print(f"path_base_www: {path_base_www}")
     print(f"open_get_prefix: {open_get_prefix}")
+    print(f"open_post_prefix: {open_post_prefix}")
     allowed_auth_header = [
         f'Bearer {secret}',
         f"Basic {base64.b64encode((':'+secret).encode('utf-8')).decode('utf-8')}",
@@ -170,9 +178,14 @@ async def run_server(
             if route and getattr(route, "handler", None) == handle_static:
                 return await handler(request)
             auth_header = request.headers.get('Authorization')
+            print(f"auth_header={request.headers.get('Authorization')}")
             if auth_header in allowed_auth_header:
+                request['admin']=True
                 return await handler(request)
+            request['admin']=False
             if request.method == 'GET' and request.path.startswith(open_get_prefix):
+                return await handler(request)
+            if request.method == 'POST' and request.path.startswith(open_post_prefix):
                 return await handler(request)
             if request.path == '/mcp':
                 return web.json_response(
@@ -313,7 +326,7 @@ async def run_server(
                 arguments = params.get("arguments", {})
                 if tool_name in func_table:
                     try:
-                        result = await call_once(func_table[tool_name], arguments, request['client_ip'])
+                        result = await call_once(func_table[tool_name], arguments, request)
                         response_body["result"] = {"content": [{"type": "text", "text": result if type(result)==str else orjson.dumps(result).decode()}]}
                     except Exception as tool_error:
                         response_body["error"] = {"code": -32603, "message": str(tool_error)}
@@ -338,10 +351,13 @@ async def run_server(
             msg = f"event: message\ndata: {orjson.dumps(error_body).decode()}\n\n"
             await response.write(msg.encode('utf-8'))
             return response
-    async def call_once(func,kwargs,clinet_ip,_serial_number=[0]):
+    async def call_once(func,kwargs,request,_serial_number=[0]):
         serial_number = _serial_number[0]
         _serial_number[0] += 1
-        print(f"[{Now()}]{clinet_ip}|FUNC CALL[{serial_number}] {func['f'].__name__} {kwargs}")
+        client_ip = request['client_ip']
+        if func['use_request']:
+            kwargs['request'] = request
+        print(f"[{Now()}]{client_ip}|FUNC CALL[{serial_number}] {func['f'].__name__} {kwargs}")
         try:
             if func['async']:
                 ret = await func['f'](**kwargs)
@@ -350,11 +366,12 @@ async def run_server(
         except Exception as e:
             ret = {'suc':False,'data':f"Tool exception: {e}"}
             with open(f"{path_this}/sqless_exception.log",'a',encoding='utf-8') as f:
-                f.write(f"[{Now()}]{clinet_ip}|FUNC CALL[{serial_number}] Exception ({e})\n{func['f'].__name__} {kwargs}\n")
+                f.write(f"[{Now()}]{client_ip}|FUNC CALL[{serial_number}] Exception ({e})\n{func['f'].__name__} {kwargs}\n")
                 f.write(traceback.format_exc())
                 f.write('\n')
-        print(f"[{Now()}]{clinet_ip}|FUNC RETURN[{serial_number}] {ret}")
+        print(f"[{Now()}]{client_ip}|FUNC RETURN[{serial_number}] {ret}")
         return ret
+
     async def handle_get_api(request):
         func_args = request.match_info.get('func_args')
         cmd = list(split(func_args,' '))
@@ -371,11 +388,11 @@ async def run_server(
             try:v = ast.literal_eval(v)
             except: pass
             kwargs[k] = v
-        task = asyncio.create_task(call_once(func, kwargs, request['client_ip']))
+        task = asyncio.create_task(call_once(func, kwargs, request))
         while not task.done():
             await asyncio.sleep(0.1)
             if request.transport is None or request.transport.is_closing():
-                print(f"[{Now()}]{request['client_ip']}|CANCEL {'async ' if func['async'] else ''}{func_name}")
+                print(f"[{Now()}]{request}|CANCEL {'async ' if func['async'] else ''}{func_name}")
                 task.cancel()
                 return
         ret = await task
@@ -385,7 +402,9 @@ async def run_server(
             kwargs = await request.json()
         else:
             post = await request.post()
-            kwargs = dict(post)
+            kwargs = {}
+            for key, value in post.items():
+                kwargs[key] = value
         print(kwargs)
         if 'f' not in kwargs:
             return web.Response(body=orjson.dumps({"suc": False, "data": "Miss 'f' input"}), content_type='application/json')
@@ -394,7 +413,7 @@ async def run_server(
             return web.Response(body=orjson.dumps({"suc": False, "data": "Tool not found"}), content_type='application/json')
         func = func_table[func_name]
         info_params = ','.join([f"{k}={v}" for k,v in kwargs.items()])
-        task = asyncio.create_task(call_once(func, kwargs, request['client_ip']))
+        task = asyncio.create_task(call_once(func, kwargs, request))
         while not task.done():
             await asyncio.sleep(0.1)
             if request.transport is None or request.transport.is_closing():

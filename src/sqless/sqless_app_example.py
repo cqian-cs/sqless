@@ -2,6 +2,12 @@
 import os
 import asyncio
 import sqless
+import aiohttp
+from aiohttp import web
+import base64
+import mimetypes
+from urllib.parse import unquote_to_bytes
+
 path_this :str = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
 
 cfg = {
@@ -13,11 +19,17 @@ cfg = {
     'path_base_www': os.path.realpath(f"{path_this}/www"),
     'max_filesize': 200,  # Max file size (in MB) allowed
     'open_get_prefix': [
-        '/fs/data',  # allow GET /fs/xxx to fetch f"{path_base_fs}/xxx" without secret
-        '/api/hello' # allow GET /api/hello without secret
-    ]
+        '/fs/public',  # allow GET /fs/public to fetch f"{path_base_fs}/public" without secret
+        '/api/hello',  # allow GET /api/hello without secret
+    ],
+    'open_post_prefix': [
+        '/api/hello',  # allow POST /api/hello without secret
+    ],
 }
 async def on_init(app):
+    async def handler_custom(request:web.Request):
+        return web.Response(text="Hello from sqless_app custom route")
+    app.router.add_get('/custom',handler_custom)
     print("Enter on_init")
 
 async def on_exit():
@@ -59,6 +71,62 @@ async def sleep(seconds: int) -> str:
         await asyncio.sleep(seconds)
         t2 = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return f"Slept for {seconds} seconds, arrive at {t0}, start at {t1}, finish at {t2}"
+
+
+# There are two types of parameters in tool functions that are hidden from the client
+# 1. `request` which is automatically passed in by the server.
+# 2. Parameters starting with _, such as _cache, _buffer, etc.
+@sqless.api
+def me(request: web.Request) -> dict:
+    """check client info"""
+    ip = request['client_ip']
+    role = 'admin' if request['admin'] else 'no_login'
+    return {'ip':ip,'role':role}
+
+# This demonstrates how tool functions receive attachment parameters
+# 1. Via POST form: {f=read_file, url=file}
+# 2. Via API/MCP call: 
+#   - Method 1, encode the file as a URL: {'f': read_file, 'url': data:{mime};base64,{base}}
+#   - Method 2, upload the file externally: {'f': read_file, 'url': http(s)://xxx}
+#   - Method 3, upload via POST /fs/xxx and let the tool function read it: {'f': read_file, 'url': xxx}
+@sqless.api
+async def read_file(url: str) -> dict:
+    """receive attachment"""
+    file = None
+    if type(url) is web.FileField:
+        file = {'filename':url.filename,'content':url.file.read(),'content-type':url.content_type}
+    if not file and type(file) is str:
+        if url.startswith("data:"):
+            header, _, payload = url.partition(",")
+            meta = header[len("data:"):]
+            is_base64 = meta.endswith(";base64")
+            mime = meta[:-len(";base64")] if is_base64 else meta
+            mime = mime or "text/plain"
+            if is_base64:
+                payload = payload.replace("-", "+").replace("_", "/")  # URL-safe 兼容
+                padding = (-len(payload)) % 4
+                raw = base64.b64decode(payload + "=" * padding)
+            else:
+                raw = unquote_to_bytes(payload)
+            ext = mimetypes.guess_extension(mime) or ""
+            file = {'filename':f"file{ext}",'content':raw,'content-type':mime}
+        elif url.startswith(("http://", "https://")):
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+                async with session.get(url) as resp:
+                    resp.raise_for_status()
+                    raw = await resp.read()
+                    mime = resp.headers.get("Content-Type", "application/octet-stream").split(";")[0].strip()
+                    filename = url.rsplit("/", 1)[-1].split("?")[0] or "file"
+            file = {'filename':filename,'content':raw,'content-type':mime}
+        elif os.path.exists(f"{cfg['path_base_fs']}/{url}"):
+            with open(f"{cfg['path_base_fs']}/{url}", "rb") as f:
+                raw = f.read()
+            mime, _ = mimetypes.guess_type(url)
+            mime = mime or "application/octet-stream"
+            file = {'filename':os.path.basename(url),'content':raw,'content-type':mime}
+    if not file:
+        return {'suc':False,'data': f"Can not open {url}"}
+    return {'suc':True,'data': f"{file['content'][:200]}"}
 
 
 

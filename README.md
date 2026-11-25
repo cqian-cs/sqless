@@ -273,6 +273,6 @@ sqless
 ```
 该命令会在当前目录生成 [sqless_app.py](src/sqless/sqless_app_example.py)。
 
-内含配置项（`cfg`）、初始化与退出钩子（`on_init` / `on_exit`）、多数据库对象（`dbs`）、四个示例函数（`hello`、`add`、`get_time`、`sleep`）、用法说明（MCP配置、API调用方式、`/db`数据库接口、`/fs`文件上传下载、`www/`静态网站）。
+内含配置项（`cfg`）、初始化与退出钩子（`on_init` / `on_exit`）、多数据库对象（`dbs`）、六个示例函数（`hello`、`add`、`get_time`、`sleep`、`me`、`read_file`）、用法说明（MCP配置、API调用方式、`/db`数据库接口、`/fs`文件上传下载、`www/`静态网站）。
 
 

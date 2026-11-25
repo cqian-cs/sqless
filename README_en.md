@@ -278,4 +278,4 @@ sqless
 
 The command generates [sqless_app.py](src/sqless/sqless_app_example.py) in the current directory.
 
-It contains config (`cfg`), init and exit hooks (`on_init` / `on_exit`), multi-database handles (`dbs`), four example functions (`hello`, `add`, `get_time`, `sleep`), and usage notes (MCP setup, API calling styles, the `/db` database API, `/fs` file upload and download, and the `www/` static site).
+It contains config (`cfg`), init and exit hooks (`on_init` / `on_exit`), multi-database handles (`dbs`), six example functions (`hello`, `add`, `get_time`, `sleep`, `me`, `read_file`), and usage notes (MCP setup, API calling styles, the `/db` database API, `/fs` file upload and download, and the `www/` static site).
